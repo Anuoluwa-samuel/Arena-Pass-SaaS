@@ -7,6 +7,8 @@ const securityHeaders = [
   { key: "X-DNS-Prefetch-Control", value: "on" },
 ]
 
+const privateHeaders = [{ key: "Cache-Control", value: "private, no-store, max-age=0, must-revalidate" }]
+
 const nextConfig = {
   // Type errors fail the build — no silent shipping of broken code.
   typescript: { ignoreBuildErrors: false },
@@ -17,7 +19,18 @@ const nextConfig = {
   // Dev only: let phones on the local network load dev assets from this Mac.
   allowedDevOrigins: ["172.20.10.3", "192.168.*.*", "10.*.*.*", "172.*.*.*"],
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }]
+    return [
+      { source: "/(.*)", headers: securityHeaders },
+      // Pages that show one person's account or one arena's admin data. Next
+      // already renders them on demand; this states that no shared cache may
+      // keep a copy, which matters in front of a CDN where "no-cache" still
+      // permits storage. Applied at the routing layer because the renderer
+      // sets its own Cache-Control afterwards.
+      { source: "/account/:path*", headers: privateHeaders },
+      { source: "/admin/:path*", headers: privateHeaders },
+      { source: "/tickets/:path*", headers: privateHeaders },
+      { source: "/checkout/:path*", headers: privateHeaders },
+    ]
   },
 }
 

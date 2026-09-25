@@ -16,11 +16,19 @@ import { HeroSteps } from "@/components/site/hero-steps"
 import { formatMoney, formatShortDate, formatTimeRange } from "@/lib/format"
 import { getCurrentCustomer } from "@/server/auth/session"
 import { getFeaturedSessions, getPublicSessions, getPublicSiteContent } from "@/server/services/public-content"
+import { PlatformHome } from "@/components/platform/platform-home"
+import { requirePublicTenantOrPlatformHome, rootDomain } from "@/server/tenant"
 
 export const dynamic = "force-dynamic"
 
 export default async function LandingPage() {
-  const [content, customer] = await Promise.all([getPublicSiteContent(), getCurrentCustomer()])
+  const tenant = await requirePublicTenantOrPlatformHome()
+  // This hostname belongs to no arena, so there is no storefront to render.
+  // The apex is the platform's own front door instead — see
+  // `requirePublicTenantOrPlatformHome`.
+  if (!tenant) return <PlatformHome rootDomain={rootDomain()} />
+
+  const [content, customer] = await Promise.all([getPublicSiteContent(tenant.arenaId), getCurrentCustomer()])
   const { homepage, services, faqs, announcements, banners } = content
   // CMS buttons are written for visitors. A signed-in customer never needs "Create account" or "Sign in":
   // those buttons point to their dashboard instead.
@@ -30,8 +38,8 @@ export default async function LandingPage() {
   const secondaryCta = forCustomer(homepage.hero.secondaryCta)
   const closingCta = forCustomer({ label: homepage.cta.buttonLabel, href: homepage.cta.buttonHref })
   const [featured, sessions] = await Promise.all([
-    homepage.featuredSessionsCount > 0 ? getFeaturedSessions(homepage.featuredSessionsCount) : Promise.resolve([]),
-    getPublicSessions(),
+    homepage.featuredSessionsCount > 0 ? getFeaturedSessions(tenant.arenaId, homepage.featuredSessionsCount) : Promise.resolve([]),
+    getPublicSessions(tenant.arenaId),
   ])
   // Stats count every public session (same source as the Sessions page), not just the featured few.
   const open = sessions.filter((s) => s.status === "OPEN_FOR_BOOKING")

@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
+import { headers } from "next/headers"
 
 // Barlow Condensed is the stadium-board display face for headlines; Manrope is
 // the readable body; DM Mono is the uppercase "/LABEL" voice and ticket numbers.
@@ -43,17 +44,20 @@ export const metadata: Metadata = {
  */
 const phoneZoomScript = `(function(){var d=document.documentElement;function f(){var s=screen.width,w=window.innerWidth;var on=s>0&&s<640&&w>s*1.2&&matchMedia("(pointer: coarse)").matches;if(on){d.style.zoom=String(w/s);d.style.setProperty("--phone-zoom",String(w/s));d.setAttribute("data-phone-zoom","")}else if(d.hasAttribute("data-phone-zoom")){d.style.zoom="";d.style.removeProperty("--phone-zoom");d.removeAttribute("data-phone-zoom")}}f();addEventListener("resize",f)})()`
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // Set by the proxy, one per request: the only inline script the policy will
+  // run is the one carrying this value.
+  const nonce = (await headers()).get("x-nonce") ?? undefined
   return (
     // suppressHydrationWarning: next-themes writes the theme class onto <html>
     // from an inline script before hydration, so the server markup won't match.
     <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: phoneZoomScript }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: phoneZoomScript }} />
       </head>
       <body className="font-sans antialiased">
         <ThemeProvider
@@ -61,6 +65,10 @@ export default function RootLayout({
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
+          // next-themes writes an inline script to set the theme before
+          // hydration; without the nonce the policy blocks it and the page
+          // flashes the wrong theme.
+          nonce={nonce}
         >
           {children}
           <Toaster position="top-center" richColors closeButton />
