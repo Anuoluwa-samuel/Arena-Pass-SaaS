@@ -14,10 +14,18 @@ export function ok<T>(data: T, init?: { message?: string; status?: number; meta?
   return NextResponse.json(body, { status: init?.status ?? 200, headers: init?.headers })
 }
 
+/**
+ * Failures are never cached. A denial can depend on who asked, which arena
+ * they asked about, and whether they were signed in at the time — none of
+ * which belongs in a shared cache, and a stored 403 is a confusing thing to
+ * serve back to someone who would now be allowed.
+ */
 export function fail(error: AppError, headers?: HeadersInit) {
   const body: ApiFailure = { success: false, message: error.message, code: error.code }
   if (error.details !== undefined) body.details = error.details
-  return NextResponse.json(body, { status: error.status, headers })
+  const merged = new Headers(headers)
+  if (!merged.has("Cache-Control")) merged.set("Cache-Control", "private, no-store")
+  return NextResponse.json(body, { status: error.status, headers: merged })
 }
 
 export function toAppError(err: unknown): AppError {

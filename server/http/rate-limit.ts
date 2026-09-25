@@ -55,6 +55,19 @@ export const RATE_LIMITS = {
   upload: { name: "media.upload", limit: 30, windowMs: 10 * 60_000 },
 } satisfies Record<string, RateLimitRule>
 
+/**
+ * Scopes a limit to one arena.
+ *
+ * Without this, every tenant shares one bucket per IP: a busy arena — or one
+ * under attack — exhausts the sign-in allowance of everyone else behind the
+ * same address, which on mobile networks is a great many unrelated people.
+ * Requests that belong to no arena (the platform sign-in page, arena
+ * registration) share a "platform" bucket.
+ */
+export function scopedKey(arenaId: string | null | undefined, identifier: string) {
+  return `${arenaId ?? "platform"}:${identifier}`
+}
+
 export async function enforceRateLimit(rule: RateLimitRule, identifier: string) {
   const { count, resetAt } = await store.hit(`${rule.name}:${identifier}`, rule.windowMs)
   if (count > rule.limit) {

@@ -5,7 +5,9 @@ import { and, eq, gt, isNull } from "drizzle-orm"
 import { db, schema } from "@/server/db"
 import { env } from "@/server/env"
 import { randomToken, sha256 } from "./tokens"
-import type { Permission } from "@/lib/domain/constants"
+import { loadArenaMemberships, loadPlatformAccess, IMPERSONATION_PERMISSIONS, type ArenaAccess, type PlatformAccess } from "@/server/tenant/authorization"
+import { getActiveImpersonation } from "@/server/services/platform"
+import { getTenantContext } from "@/server/tenant/context"
 
 export const ADMIN_COOKIE = "ap_admin_session"
 export const CUSTOMER_COOKIE = "ap_customer_session"
@@ -15,23 +17,33 @@ const CUSTOMER_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30d
 
 type PrincipalType = "user" | "customer"
 
+/**
+ * An authenticated operator.
+ *
+ * There is no single `role` or `permissions` list any more, because there is
+ * no single answer: what this user may do depends on *which arena* is being
+ * acted on. `memberships` holds one entry per arena they may act in, each
+ * with its own role and permissions, and `platform` holds their standing on
+ * the platform itself. Authorisation reads these through
+ * `server/tenant/authorization`; nothing else grants access.
+ */
 export interface AuthenticatedUser {
   id: string
-  arenaId: string | null
   email: string
   name: string
-  roleKey: schema.Role["key"]
-  roleName: string
-  permissions: Permission[]
   sessionId: string
+  memberships: ArenaAccess[]
+  platform: PlatformAccess | null
 }
 
 export interface AuthenticatedCustomer {
   id: string
+  arenaId: string
   email: string
   name: string
   username: string | null
   phone: string | null
+  emailVerifiedAt: Date | null
   sessionId: string
 }
 
@@ -118,17 +130,75 @@ export async function loadUserPrincipal(userId: string, sessionId: string): Prom
     where: and(eq(schema.users.id, userId), eq(schema.users.isActive, true), isNull(schema.users.deletedAt)),
   })
   if (!user) return null
-  const role = await database.query.roles.findFirst({ where: eq(schema.roles.id, user.roleId) })
-  if (!role) return null
-  const perms = await database.query.rolePermissions.findMany({ where: eq(schema.rolePermissions.roleId, role.id) })
+  const [memberships, platform] = await Promise.all([
+    loadArenaMemberships(user.id),
+    loadPlatformAccess(user.platformRoleId),
+  ])
+
+  // A live impersonation adds one read-only arena to what this operator can
+  // reach — and only while it lasts. It never replaces or widens a real
+  // membership: if they are already a member, that access stands on its own.
+  const impersonation = platform ? await getActiveImpersonation(user.id) : null
+  if (impersonation && !memberships.some((m) => m.arenaId === impersonation.arenaId)) {
+    const arena = await database.query.arenas.findFirst({ where: eq(schema.arenas.id, impersonation.arenaId) })
+    if (arena) {
+      memberships.push({
+        arenaId: arena.id,
+        arenaSlug: arena.slug,
+        arenaName: arena.name,
+        membershipId: `impersonation:${impersonation.id}`,
+        roleKey: "STAFF",
+        roleName: "Platform support (read-only)",
+        permissions: [...IMPERSONATION_PERMISSIONS],
+        impersonated: true,
+        impersonationExpiresAt: impersonation.expiresAt,
+      })
+    }
+  }
+
   return {
     id: user.id,
-    arenaId: user.arenaId,
     email: user.email,
     name: user.name,
-    roleKey: role.key,
-    roleName: role.name,
-    permissions: perms.map((p) => p.permission as Permission),
+    sessionId,
+    memberships,
+    platform,
+  }
+}
+
+/**
+ * A customer account belongs to exactly one arena, so a session for it is
+ * only valid on *that* arena's storefront.
+ *
+ * Without this check a customer signed in at one arena would appear signed in
+ * at another — the reads are scoped so they would see no data, but the site
+ * would greet them by name and offer them an account they do not have there.
+ * Returns null on a mismatch, which every caller already treats as "signed
+ * out".
+ */
+export async function loadCustomerPrincipal(
+  customerId: string,
+  arenaId: string,
+  sessionId: string
+): Promise<AuthenticatedCustomer | null> {
+  const database = await db()
+  const customer = await database.query.customers.findFirst({
+    where: and(
+      eq(schema.customers.id, customerId),
+      eq(schema.customers.arenaId, arenaId),
+      eq(schema.customers.isActive, true),
+      isNull(schema.customers.deletedAt)
+    ),
+  })
+  if (!customer) return null
+  return {
+    id: customer.id,
+    arenaId: customer.arenaId,
+    email: customer.email,
+    name: customer.name,
+    username: customer.username,
+    phone: customer.phone,
+    emailVerifiedAt: customer.emailVerifiedAt,
     sessionId,
   }
 }
@@ -137,12 +207,10 @@ export const getCurrentCustomer = cache(async (): Promise<AuthenticatedCustomer 
   const store = await cookies()
   const session = await findLiveSession("customer", store.get(CUSTOMER_COOKIE)?.value)
   if (!session) return null
-  const database = await db()
-  const customer = await database.query.customers.findFirst({
-    where: and(eq(schema.customers.id, session.principalId), eq(schema.customers.isActive, true), isNull(schema.customers.deletedAt)),
-  })
-  if (!customer) return null
-  return { id: customer.id, email: customer.email, name: customer.name, username: customer.username, phone: customer.phone, sessionId: session.id }
+  // No storefront, no customer: a customer session means nothing off an arena.
+  const tenant = await getTenantContext()
+  if (!tenant) return null
+  return loadCustomerPrincipal(session.principalId, tenant.arenaId, session.id)
 })
 
 /** Token-based variant for route handlers that receive the cookie header directly (e.g. tests). */

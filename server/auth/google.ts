@@ -1,7 +1,7 @@
 import "server-only"
 import { createHash } from "node:crypto"
 import { cookies } from "next/headers"
-import { eq, sql } from "drizzle-orm"
+import { and, eq, sql } from "drizzle-orm"
 import { db, schema } from "@/server/db"
 import { env } from "@/server/env"
 import { AppError, isUniqueViolation } from "@/server/http/errors"
@@ -153,13 +153,13 @@ export function verifyGoogleIdToken(idToken: string, expected: { clientId: strin
  * 2. else the account with the same (Google-verified) email, which gets linked;
  * 3. else a new customer with no password.
  */
-export async function resolveGoogleCustomer(claims: GoogleClaims, meta: { ip?: string | null } = {}, isRetry = false): Promise<{ customer: schema.Customer; created: boolean; passwordCleared: boolean }> {
+export async function resolveGoogleCustomer(arenaId: string, claims: GoogleClaims, meta: { ip?: string | null } = {}, isRetry = false): Promise<{ customer: schema.Customer; created: boolean; passwordCleared: boolean }> {
   const database = await db()
   // Normalise here rather than trusting callers: a case mismatch would miss the
   // existing row and collide with the lower(email) unique index on insert.
   const email = claims.email.trim().toLowerCase()
-  const linked = await database.query.customers.findFirst({ where: eq(schema.customers.googleSub, claims.sub) })
-  const existing = linked ?? (await database.query.customers.findFirst({ where: sql`lower(${schema.customers.email}) = ${email}` }))
+  const linked = await database.query.customers.findFirst({ where: and(eq(schema.customers.googleSub, claims.sub), eq(schema.customers.arenaId, arenaId)) })
+  const existing = linked ?? (await database.query.customers.findFirst({ where: and(sql`lower(${schema.customers.email}) = ${email}`, eq(schema.customers.arenaId, arenaId)) }))
 
   if (existing) {
     if (existing.deletedAt || !existing.isActive) throw new AppError("ACCOUNT_DISABLED", "This account has been disabled")
@@ -195,13 +195,13 @@ export async function resolveGoogleCustomer(claims: GoogleClaims, meta: { ip?: s
   try {
     const [customer] = await database
       .insert(schema.customers)
-      .values({ name: claims.name, email, googleSub: claims.sub, lastLoginAt: new Date() })
+      .values({ arenaId, name: claims.name, email, googleSub: claims.sub, lastLoginAt: new Date() })
       .returning()
     return { customer, created: true, passwordCleared: false }
   } catch (err) {
     // Two first-time callbacks for the same identity raced; the loser resolves to
     // the winner's row. Retry once only, so an unexpected conflict can't loop.
-    if (!isRetry && isUniqueViolation(err)) return resolveGoogleCustomer(claims, meta, true)
+    if (!isRetry && isUniqueViolation(err)) return resolveGoogleCustomer(arenaId, claims, meta, true)
     throw err
   }
 }

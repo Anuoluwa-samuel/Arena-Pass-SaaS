@@ -7,6 +7,7 @@ import { getEmailChannel } from "@/server/notifications/email"
 import { passwordResetEmail } from "@/server/notifications/templates"
 import { logger, serializeError } from "@/server/observability/logger"
 import { recordAudit } from "@/server/services/audit"
+import { getSettings } from "@/server/services/settings"
 import { hashPassword } from "./password"
 import { revokeAllSessionsFor } from "./session"
 import { randomToken, sha256 } from "./tokens"
@@ -27,11 +28,14 @@ const INVALID_TOKEN_MESSAGE = "This reset link is invalid or has expired. Please
  * the same lookup for every email — known and unknown addresses look identical
  * in both body and timing. Returns null when there is nothing to send.
  */
-export async function requestPasswordReset(email: string, meta: RequestMeta): Promise<(() => Promise<void>) | null> {
+export async function requestPasswordReset(
+  arenaId: string,
+  email: string, meta: RequestMeta): Promise<(() => Promise<void>) | null> {
   const database = await db()
   const customer = await database.query.customers.findFirst({
     where: and(
       sql`lower(${schema.customers.email}) = ${email.toLowerCase()}`,
+      eq(schema.customers.arenaId, arenaId),
       isNull(schema.customers.deletedAt),
       eq(schema.customers.isActive, true)
     ),
@@ -56,8 +60,11 @@ export async function requestPasswordReset(email: string, meta: RequestMeta): Pr
 
       const resetUrl = new URL("/reset-password", env.APP_URL)
       resetUrl.searchParams.set("token", token)
+      // The arena's own name: a customer of one storefront must never receive
+      // mail branded as the platform, or as another arena.
+      const settings = await getSettings(arenaId)
       const message = passwordResetEmail({
-        appName: env.APP_NAME,
+        appName: settings.siteName || env.APP_NAME,
         customerName: customer.name,
         resetUrl: resetUrl.toString(),
         expiresInMinutes: RESET_TOKEN_TTL_MS / 60_000,
