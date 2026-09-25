@@ -25,7 +25,7 @@ export function rowsOf<T = Record<string, unknown>>(result: unknown): T[] {
 }
 
 const globalForDb = globalThis as unknown as {
-  __arenaPassDb?: Promise<Database>
+  __gameSlotsDb?: Promise<Database>
 }
 
 async function createDatabase(): Promise<Database> {
@@ -55,15 +55,15 @@ async function createDatabase(): Promise<Database> {
 }
 
 export function getDb(): Promise<Database> {
-  if (!globalForDb.__arenaPassDb) {
-    globalForDb.__arenaPassDb = createDatabase()
+  if (!globalForDb.__gameSlotsDb) {
+    globalForDb.__gameSlotsDb = createDatabase()
   }
-  return globalForDb.__arenaPassDb
+  return globalForDb.__gameSlotsDb
 }
 
 /** Test helper: swap the shared instance (used by the integration suite). */
 export function __setDbForTests(db: Database) {
-  globalForDb.__arenaPassDb = Promise.resolve(db)
+  globalForDb.__gameSlotsDb = Promise.resolve(db)
 }
 
 export { schema }

@@ -8,12 +8,12 @@ import { logger } from "@/server/observability/logger"
 
 const migrationsFolder = path.join(process.cwd(), "server", "db", "migrations")
 
-const globalForMigrate = globalThis as unknown as { __arenaPassMigrated?: Promise<void> }
+const globalForMigrate = globalThis as unknown as { __gameSlotsMigrated?: Promise<void> }
 
 /** Apply pending SQL migrations. Safe to call repeatedly; runs once per process. */
 export function runMigrations(db?: Database): Promise<void> {
-  if (!globalForMigrate.__arenaPassMigrated) {
-    globalForMigrate.__arenaPassMigrated = (async () => {
+  if (!globalForMigrate.__gameSlotsMigrated) {
+    globalForMigrate.__gameSlotsMigrated = (async () => {
       const database = db ?? (await getDb())
       if (env.DATABASE_URL) {
         await migratePg(database as any, { migrationsFolder })
@@ -23,5 +23,5 @@ export function runMigrations(db?: Database): Promise<void> {
       logger.info("db.migrated")
     })()
   }
-  return globalForMigrate.__arenaPassMigrated
+  return globalForMigrate.__gameSlotsMigrated
 }

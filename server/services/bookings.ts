@@ -243,7 +243,7 @@ export async function releaseExpiredHoldsForSession(sessionId: string) {
   })
 }
 
-const holdSweep = globalThis as unknown as { __arenaPassHoldSweep?: { at: number; running?: Promise<void> } }
+const holdSweep = globalThis as unknown as { __gameSlotsHoldSweep?: { at: number; running?: Promise<void> } }
 
 /**
  * Throttled sweep of every expired hold, for list reads. The housekeeping cron
@@ -252,7 +252,7 @@ const holdSweep = globalThis as unknown as { __arenaPassHoldSweep?: { at: number
  * process and never throws into the caller.
  */
 export function sweepExpiredHolds(minIntervalMs = 30_000): Promise<void> {
-  const state = (holdSweep.__arenaPassHoldSweep ??= { at: 0 })
+  const state = (holdSweep.__gameSlotsHoldSweep ??= { at: 0 })
   if (state.running) return state.running
   if (Date.now() - state.at < minIntervalMs) return Promise.resolve()
   state.at = Date.now()

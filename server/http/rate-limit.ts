@@ -34,8 +34,8 @@ class MemoryStore implements RateLimitStore {
   }
 }
 
-const globalStore = globalThis as unknown as { __arenaPassRateLimit?: RateLimitStore }
-const store: RateLimitStore = (globalStore.__arenaPassRateLimit ??= new MemoryStore())
+const globalStore = globalThis as unknown as { __gameSlotsRateLimit?: RateLimitStore }
+const store: RateLimitStore = (globalStore.__gameSlotsRateLimit ??= new MemoryStore())
 
 export interface RateLimitRule {
   /** Logical bucket name, e.g. "auth.login". */
