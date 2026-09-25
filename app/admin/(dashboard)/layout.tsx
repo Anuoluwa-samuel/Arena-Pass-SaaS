@@ -29,7 +29,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   } catch (err) {
     if (err instanceof AppError && (err.code === "FORBIDDEN" || err.code === "ARENA_SELECTION_REQUIRED")) {
       const reason = err.code === "ARENA_SELECTION_REQUIRED" ? "choose" : user.memberships.length > 0 ? "no-access" : "none"
-      return <ArenaAccessDenied reason={reason} arenas={user.memberships.map((m) => ({ arenaId: m.arenaId, arenaName: m.arenaName, arenaSlug: m.arenaSlug }))} />
+      return (
+        <ArenaAccessDenied
+          reason={reason}
+          arenas={user.memberships.map((m) => ({ arenaId: m.arenaId, arenaName: m.arenaName, arenaSlug: m.arenaSlug, roleName: m.roleName }))}
+          isPlatformStaff={Boolean(user.platform)}
+        />
+      )
     }
     throw err
   }
