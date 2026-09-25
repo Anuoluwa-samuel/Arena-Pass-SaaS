@@ -4,12 +4,13 @@ import { CmsIcon } from "@/components/site/cms-icon"
 import { Spotlight } from "@/components/spotlight"
 import { BlurText } from "@/components/motion"
 import { getPublicSiteContent } from "@/server/services/public-content"
+import { requirePublicTenantForPage } from "@/server/tenant"
 
 export const dynamic = "force-dynamic"
 export const metadata = { title: "About" }
 
 export default async function AboutPage() {
-  const { about, services, servicesPage } = await getPublicSiteContent()
+  const { about, services, servicesPage } = await getPublicSiteContent((await requirePublicTenantForPage()).arenaId)
   return (
     <main className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
       <Reveal trigger="mount">

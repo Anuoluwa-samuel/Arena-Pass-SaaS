@@ -7,16 +7,16 @@ import { TicketStatusBadge } from "@/components/shared/status-badge"
 import { DataTable } from "@/components/admin/data-table"
 import { FilterTabs, Pagination, SearchBox } from "@/components/admin/list-toolbar"
 import { TicketRowActions } from "@/components/admin/ticket-row-actions"
-import { requirePermission } from "@/server/auth/rbac"
+import { requireArenaPermission } from "@/server/auth/rbac"
 import { listTickets } from "@/server/services/tickets"
 import { formatDateTime, formatMoney } from "@/lib/format"
 
 export const metadata = { title: "Tickets" }
 
 export default async function AdminTicketsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const user = await requirePermission("tickets.view")
+  const { arena } = await requireArenaPermission("tickets.view")
   const sp = await searchParams
-  const result = await listTickets({ status: sp.status, q: sp.q, sessionId: sp.sessionId, page: Number(sp.page ?? 1), pageSize: 25 })
+  const result = await listTickets(arena.arenaId, { status: sp.status, q: sp.q, sessionId: sp.sessionId, page: Number(sp.page ?? 1), pageSize: 25 })
   return (
     <div className="space-y-6">
       <PageHeader title="Tickets" description="Every ticket issued, with its payment and entry status." />
@@ -38,7 +38,7 @@ export default async function AdminTicketsPage({ searchParams }: { searchParams:
           { key: "price", header: "Paid", cell: (r) => formatMoney(r.ticket.price, r.ticket.currency) },
           { key: "status", header: "Status", cell: (r) => <TicketStatusBadge status={r.ticket.status} /> },
           { key: "purchased", header: "Purchased", hideOnMobile: true, cell: (r) => formatDateTime(r.ticket.purchasedAt) },
-          { key: "actions", header: "", className: "w-12 text-right", mobileHeader: true, cell: (r) => <TicketRowActions ticket={{ id: r.ticket.id, ticketNumber: r.ticket.ticketNumber, status: r.ticket.status }} canManage={user.permissions.includes("tickets.manage")} /> },
+          { key: "actions", header: "", className: "w-12 text-right", mobileHeader: true, cell: (r) => <TicketRowActions ticket={{ id: r.ticket.id, ticketNumber: r.ticket.ticketNumber, status: r.ticket.status }} canManage={arena.permissions.includes("tickets.manage")} /> },
         ]}
       />
       <Suspense><Pagination page={result.meta.page} totalPages={result.meta.totalPages} total={result.meta.total} pageSize={result.meta.pageSize} /></Suspense>

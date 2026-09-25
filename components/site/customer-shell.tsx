@@ -193,7 +193,7 @@ function SidebarBody({ customer, siteName, collapsed, indicatorId, stagger = fal
         <div className={cn("flex h-16 items-center gap-2 pl-5 pr-3", collapsed && "h-auto flex-col gap-2 px-0 py-3")}>
           <Link href="/account" onClick={onNavigate} className={cn("flex min-w-0 flex-1 items-center gap-2.5", collapsed && "flex-none")} aria-label={collapsed ? "Your home" : undefined}>
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary">
-              <span className="text-sm font-black tracking-tight text-primary-foreground">AP</span>
+              <span className="text-sm font-black tracking-tight text-primary-foreground">{initials(siteName)}</span>
             </span>
             {!collapsed && <span className="truncate text-lg font-bold tracking-tight">{siteName}</span>}
           </Link>
@@ -337,7 +337,7 @@ export function CustomerShell({
           </button>
           <Link href="/account" className="flex items-center gap-2">
             <span className="flex size-8 items-center justify-center rounded-lg bg-primary">
-              <span className="text-xs font-black tracking-tight text-primary-foreground">AP</span>
+              <span className="text-xs font-black tracking-tight text-primary-foreground">{initials(siteName)}</span>
             </span>
             <span className="font-bold tracking-tight">{siteName}</span>
           </Link>

@@ -29,7 +29,7 @@ export function AdministratorsTable({ users, me, canManage }: { users: Row[]; me
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState<Row | null>(null)
-  const roleOptions = ROLE_KEYS.filter((k) => k !== "SUPER_ADMIN" || me.roleKey === "SUPER_ADMIN")
+  const roleOptions = ROLE_KEYS.filter((k) => k !== "PLATFORM_OWNER" || me.roleKey === "PLATFORM_OWNER")
 
   function blank(): Form {
     return { name: "", email: "", phone: "", roleKey: "STAFF", password: "", isActive: true }
@@ -78,7 +78,7 @@ export function AdministratorsTable({ users, me, canManage }: { users: Row[]; me
         empty={<EmptyState icon={UserX} title="No administrators match" />}
         columns={[
           { key: "name", header: "Name", hideOnMobile: true, cell: (u) => <div><p className="font-medium">{u.name}{u.id === me.id && <span className="ml-2 text-xs text-muted-foreground">(you)</span>}</p><p className="text-xs text-muted-foreground">{u.email}</p></div> },
-          { key: "role", header: "Role", cell: (u) => <ToneBadge tone={u.role.key === "SUPER_ADMIN" ? "warning" : "info"}>{u.role.name}</ToneBadge> },
+          { key: "role", header: "Role", cell: (u) => <ToneBadge tone={u.role.key === "PLATFORM_OWNER" ? "warning" : "info"}>{u.role.name}</ToneBadge> },
           { key: "status", header: "Status", cell: (u) => (u.isActive ? <ToneBadge tone="success">Active</ToneBadge> : <ToneBadge tone="danger">Disabled</ToneBadge>) },
           { key: "login", header: "Last sign-in", cell: (u) => (u.lastLoginAt ? formatRelative(u.lastLoginAt) : "Never") },
           { key: "created", header: "Added", hideOnMobile: true, cell: (u) => formatDateTime(u.createdAt) },

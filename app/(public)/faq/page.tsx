@@ -2,12 +2,13 @@ import { FaqList } from "@/components/site/faq-list"
 import { Reveal } from "@/components/motion"
 import { PageHeader } from "@/components/shared/page-header"
 import { getPublicSiteContent } from "@/server/services/public-content"
+import { requirePublicTenantForPage } from "@/server/tenant"
 
 export const dynamic = "force-dynamic"
 export const metadata = { title: "FAQ" }
 
 export default async function FaqPage() {
-  const { faqs, contact } = await getPublicSiteContent()
+  const { faqs, contact } = await getPublicSiteContent((await requirePublicTenantForPage()).arenaId)
   return (
     <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
       <Reveal trigger="mount">

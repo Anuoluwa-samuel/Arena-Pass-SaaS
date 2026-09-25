@@ -4,16 +4,16 @@ import { PageHeader } from "@/components/shared/page-header"
 import { EmptyState } from "@/components/shared/empty-state"
 import { DataTable } from "@/components/admin/data-table"
 import { FilterTabs, Pagination, SearchBox } from "@/components/admin/list-toolbar"
-import { requirePermission } from "@/server/auth/rbac"
+import { requireArenaPermission } from "@/server/auth/rbac"
 import { listAuditLogs } from "@/server/services/analytics"
 import { formatDateTime } from "@/lib/format"
 
 export const metadata = { title: "Audit logs" }
 
 export default async function AuditLogsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requirePermission("audit.view")
+  const { arena } = await requireArenaPermission("audit.view")
   const sp = await searchParams
-  const result = await listAuditLogs({ q: sp.q, action: sp.action, page: Number(sp.page ?? 1), pageSize: 40 })
+  const result = await listAuditLogs(arena.arenaId, { q: sp.q, action: sp.action, page: Number(sp.page ?? 1), pageSize: 40 })
   return (
     <div className="space-y-6">
       <PageHeader title="Audit logs" description="Who did what, and when. Every administrative action is recorded." />

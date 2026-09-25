@@ -9,8 +9,22 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { ThemeToggle } from "@/components/theme-toggle"
 import { api } from "@/lib/api-client"
 import { initials } from "@/lib/format"
+import { ArenaSwitcher, type SwitchableArena } from "@/components/admin/arena-switcher"
 
-export function AdminHeader({ user }: { user: { name: string; email: string; roleName: string } }) {
+/**
+ * The arena sits at the top left on every admin screen. An operator who works
+ * for two arenas must never have to guess which one they are changing — and
+ * switching is how they move between them.
+ */
+export function AdminHeader({
+  user,
+  arena,
+  arenas,
+}: {
+  user: { name: string; email: string; roleName: string }
+  arena: SwitchableArena
+  arenas: SwitchableArena[]
+}) {
   const router = useRouter()
   const signOut = async () => {
     await api.post("/api/auth/logout").catch(() => null)
@@ -21,6 +35,7 @@ export function AdminHeader({ user }: { user: { name: string; email: string; rol
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 glass-bar border-b border-border px-4">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-5" />
+      <ArenaSwitcher current={arena} arenas={arenas} />
       <div className="ml-auto flex items-center gap-2">
         <ThemeToggle />
         <DropdownMenu>

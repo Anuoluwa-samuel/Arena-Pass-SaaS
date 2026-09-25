@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
-import { BarChart3, Bell, CalendarDays, CreditCard, Image as ImageIcon, KeyRound, LayoutDashboard, LayoutTemplate, Receipt, ScanLine, ScrollText, Settings, Shield, Ticket, Users, ChevronRight } from "lucide-react"
+import { BarChart3, Bell, CalendarDays, CreditCard, Image as ImageIcon, KeyRound, LayoutDashboard, LayoutTemplate, Receipt, Rocket, ScanLine, ScrollText, Settings, Shield, Ticket, Users, ChevronRight } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -22,6 +22,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ADMIN_NAV } from "@/lib/admin-nav"
 import type { Permission } from "@/lib/domain/constants"
+import { initials } from "@/lib/format"
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "layout-dashboard": LayoutDashboard,
@@ -39,6 +40,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   bell: Bell,
   settings: Settings,
   "scroll-text": ScrollText,
+  rocket: Rocket,
 }
 
 export function AdminSidebar({ permissions, siteName }: { permissions: Permission[]; siteName: string }) {
@@ -52,7 +54,7 @@ export function AdminSidebar({ permissions, siteName }: { permissions: Permissio
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-3 py-3">
         <Link href="/admin" className="flex items-center gap-2">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary"><span className="text-xs font-black text-primary-foreground">AP</span></div>
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary"><span className="text-xs font-black text-primary-foreground">{initials(siteName)}</span></div>
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
             <p className="truncate text-sm font-semibold">{siteName}</p>
             <p className="text-[11px] text-muted-foreground">Control center</p>

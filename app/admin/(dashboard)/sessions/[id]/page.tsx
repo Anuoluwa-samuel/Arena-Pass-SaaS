@@ -9,7 +9,7 @@ import { TeamGrid } from "@/components/shared/team-grid"
 import { StatCard } from "@/components/admin/stat-card"
 import { DataTable } from "@/components/admin/data-table"
 import { SessionRowActions } from "@/components/admin/session-row-actions"
-import { requirePermission } from "@/server/auth/rbac"
+import { requireArenaPermission } from "@/server/auth/rbac"
 import { getSessionWithTeams } from "@/server/services/sessions"
 import { listBookingsForSession } from "@/server/services/bookings"
 import { AppError } from "@/server/http/errors"
@@ -18,17 +18,17 @@ import { formatDateTime, formatMoney, formatTimeRange } from "@/lib/format"
 export const metadata = { title: "Session" }
 
 export default async function AdminSessionDetail({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requirePermission("sessions.view")
+  const { arena } = await requireArenaPermission("sessions.view")
   const { id } = await params
   let data: Awaited<ReturnType<typeof getSessionWithTeams>>
   try {
-    data = await getSessionWithTeams(id, { includeDraft: true })
+    data = await getSessionWithTeams(arena.arenaId, id, { includeDraft: true })
   } catch (err) {
     if (err instanceof AppError && err.code === "SESSION_NOT_FOUND") notFound()
     throw err
   }
   const { session, teams } = data
-  const bookings = await listBookingsForSession(id)
+  const bookings = await listBookingsForSession(arena.arenaId, id)
   const byBooking = new Map(bookings.map((b) => [b.booking.id, b]))
   const grid = teams.map((t) => ({
     teamNumber: t.teamNumber,
@@ -55,7 +55,7 @@ export default async function AdminSessionDetail({ params }: { params: Promise<{
           </>
         }
       />
-      <SessionRowActions variant="buttons" session={{ id: session.id, title: session.title, status: session.status, bookedCount: session.bookedCount }} canManage={user.permissions.includes("sessions.manage")} />
+      <SessionRowActions variant="buttons" session={{ id: session.id, title: session.title, status: session.status, bookedCount: session.bookedCount }} canManage={arena.permissions.includes("sessions.manage")} />
       {session.status === "CANCELLED" && session.cancellationReason && <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">Cancelled: {session.cancellationReason}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

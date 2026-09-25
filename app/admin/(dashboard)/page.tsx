@@ -6,8 +6,7 @@ import { PageHeader } from "@/components/shared/page-header"
 import { StatCard } from "@/components/admin/stat-card"
 import { HorizontalBars, Meter, TimeSeriesChart } from "@/components/admin/charts"
 import { StaggerGroup, StaggerItem } from "@/components/motion"
-import { requirePermission } from "@/server/auth/rbac"
-import { resolveArenaId } from "@/server/http/admin"
+import { requireArenaPermission } from "@/server/auth/rbac"
 import { getDashboardOverview, getRecentActivity } from "@/server/services/analytics"
 import { getSettings } from "@/server/services/settings"
 import { countPaymentsNeedingRefund } from "@/server/services/payments"
@@ -19,10 +18,10 @@ const PAYMENT_ICON = { PAID: CheckCircle2, PENDING: Clock, FAILED: XCircle, REFU
 const PAYMENT_TONE = { PAID: "text-primary", PENDING: "text-warning", FAILED: "text-destructive", REFUNDED: "text-muted-foreground" } as const
 
 export default async function AdminDashboard() {
-  const user = await requirePermission("dashboard.view")
-  const arenaId = await resolveArenaId(user)
+  const { user, arena } = await requireArenaPermission("dashboard.view")
+  const arenaId = arena.arenaId
   const [overview, activity, settings, needsRefund] = await Promise.all([getDashboardOverview(arenaId, { days: 30 }), getRecentActivity(arenaId), getSettings(arenaId), countPaymentsNeedingRefund(arenaId)])
-  const canRefund = user.permissions.includes("tickets.refund")
+  const canRefund = arena.permissions.includes("tickets.refund")
   const { kpis } = overview
   const currency = settings.currency
   const totalPayments = overview.payments.reduce((n, p) => n + p.count, 0)

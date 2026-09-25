@@ -7,7 +7,7 @@ import { PaymentStatusBadge, TicketStatusBadge } from "@/components/shared/statu
 import { DataTable } from "@/components/admin/data-table"
 import { FilterTabs, Pagination, SearchBox } from "@/components/admin/list-toolbar"
 import { RefundButton } from "@/components/admin/refund-button"
-import { requirePermission } from "@/server/auth/rbac"
+import { requireArenaPermission } from "@/server/auth/rbac"
 import { countPaymentsNeedingRefund, listPayments } from "@/server/services/payments"
 import { ToneBadge } from "@/components/shared/status-badge"
 import { formatDateTime, formatMoney } from "@/lib/format"
@@ -15,10 +15,10 @@ import { formatDateTime, formatMoney } from "@/lib/format"
 export const metadata = { title: "Payments" }
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const user = await requirePermission("payments.view")
+  const { arena } = await requireArenaPermission("payments.view")
   const sp = await searchParams
-  const [result, needsRefund] = await Promise.all([listPayments({ status: sp.status, q: sp.q, page: Number(sp.page ?? 1), pageSize: 25 }), countPaymentsNeedingRefund(user.arenaId)])
-  const canRefund = user.permissions.includes("tickets.refund")
+  const [result, needsRefund] = await Promise.all([listPayments(arena.arenaId, { status: sp.status, q: sp.q, page: Number(sp.page ?? 1), pageSize: 25 }), countPaymentsNeedingRefund(arena.arenaId)])
+  const canRefund = arena.permissions.includes("tickets.refund")
   return (
     <div className="space-y-6">
       <PageHeader title="Payments" description="Every payment attempt, verified server-side with the provider." />

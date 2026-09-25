@@ -8,6 +8,7 @@ import { TicketStatusBadge } from "@/components/shared/status-badge"
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion"
 import { getCurrentCustomer } from "@/server/auth/session"
 import { listTickets } from "@/server/services/tickets"
+import { requirePublicTenantForPage } from "@/server/tenant"
 import { formatDateTime, formatMoney } from "@/lib/format"
 
 export const dynamic = "force-dynamic"
@@ -16,7 +17,7 @@ export const metadata = { title: "My tickets" }
 export default async function MyTicketsPage() {
   const customer = await getCurrentCustomer()
   if (!customer) redirect("/login?next=/account/tickets")
-  const { items } = await listTickets({ customerId: customer.id, pageSize: 100 })
+  const { items } = await listTickets((await requirePublicTenantForPage()).arenaId, { customerId: customer.id, pageSize: 100 })
   const { upcoming, past } = partitionTickets(items)
 
   return (
@@ -38,7 +39,8 @@ export default async function MyTicketsPage() {
 
 /** Split by kick-off relative to request time (server component: evaluated once per request). */
 function partitionTickets(items: Awaited<ReturnType<typeof listTickets>>["items"]) {
-  // eslint-disable-next-line react-hooks/purity -- request-time clock, not render-time randomness
+  // Request-time clock, not render-time randomness: this is a server component,
+  // so it is evaluated once per request rather than on every re-render.
   const cutoff = Date.now() - 3 * 3_600_000
   return {
     upcoming: items.filter((t) => new Date(t.session.startsAt).getTime() >= cutoff),

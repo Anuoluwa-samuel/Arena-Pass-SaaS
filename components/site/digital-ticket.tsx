@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { TicketStatusBadge } from "@/components/shared/status-badge"
-import { formatDate, formatMoney, formatTimeRange } from "@/lib/format"
+import { formatDate, formatMoney, formatTimeRange, initials } from "@/lib/format"
 import type { PublicTicket } from "@/server/serializers"
 
 export function DigitalTicket({ ticket, qrImage }: { ticket: PublicTicket; qrImage: string }) {
@@ -17,7 +17,7 @@ export function DigitalTicket({ ticket, qrImage }: { ticket: PublicTicket; qrIma
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="flex size-8 items-center justify-center rounded-lg bg-primary-foreground/20">
-                <span className="text-xs font-black text-primary-foreground">AP</span>
+                <span className="text-xs font-black text-primary-foreground">{initials(ticket.arenaName)}</span>
               </div>
               <span className="font-semibold text-primary-foreground">{ticket.arenaName}</span>
             </div>

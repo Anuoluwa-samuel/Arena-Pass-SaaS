@@ -6,8 +6,8 @@ import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion"
 import { EmptyState } from "@/components/shared/empty-state"
 import { PageHeader } from "@/components/shared/page-header"
 import { Button } from "@/components/ui/button"
-import { getDefaultArena } from "@/server/services/arenas"
 import { getPublicSessions } from "@/server/services/public-content"
+import { requirePublicTenantForPage } from "@/server/tenant"
 
 export const dynamic = "force-dynamic"
 export const metadata = { title: "Sessions" }
@@ -20,8 +20,8 @@ const FILTERS = [
 
 export default async function SessionsPage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
   const { filter = "all" } = await searchParams
-  const arena = await getDefaultArena()
-  const all = await getPublicSessions()
+  const { arena, arenaId } = await requirePublicTenantForPage()
+  const all = await getPublicSessions(arenaId)
   const sessions = all.filter((s) => (filter === "open" ? s.status === "OPEN_FOR_BOOKING" : filter === "soon" ? s.status === "PUBLISHED" : true))
 
   return (

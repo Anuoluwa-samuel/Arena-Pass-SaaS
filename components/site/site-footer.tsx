@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowUpRight, Mail, MapPin, Phone } from "lucide-react"
 import { Parallax } from "@/components/motion"
 import { SectionLabel } from "@/components/shared/section-label"
+import { initials } from "@/lib/format"
 
 const EXPLORE = [
   { href: "/sessions", label: "Upcoming sessions" },
@@ -19,7 +20,7 @@ export function SiteFooter({ siteName, contact }: { siteName: string; contact: {
           <div>
             <div className="flex items-center gap-2.5">
               <div className="flex size-9 items-center justify-center rounded-lg bg-primary shadow-[0_0_24px_-6px_var(--primary)]">
-                <span className="text-xs font-black text-primary-foreground">AP</span>
+                <span className="text-xs font-black text-primary-foreground">{initials(siteName)}</span>
               </div>
               <span className="text-lg font-semibold tracking-tight">{siteName}</span>
             </div>

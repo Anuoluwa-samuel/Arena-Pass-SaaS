@@ -67,7 +67,7 @@ export function RolesMatrix({ roles, permissions, canManage }: { roles: Role[]; 
               <td className="sticky left-0 bg-card p-3 text-xs text-muted-foreground">Super admin always has every permission.</td>
               {roles.map((r) => (
                 <td key={r.key} className="p-3 text-center">
-                  {r.key !== "SUPER_ADMIN" && <Button size="sm" variant={dirty.has(r.key) ? "default" : "outline"} disabled={!dirty.has(r.key) || saving !== null} onClick={() => save(r.key)}>{saving === r.key ? <Spinner className="size-3.5" /> : "Save"}</Button>}
+                  {r.key !== "PLATFORM_OWNER" && <Button size="sm" variant={dirty.has(r.key) ? "default" : "outline"} disabled={!dirty.has(r.key) || saving !== null} onClick={() => save(r.key)}>{saving === r.key ? <Spinner className="size-3.5" /> : "Save"}</Button>}
                 </td>
               ))}
             </tr>
@@ -87,7 +87,7 @@ function GroupRows({ group, perms, roles, state, canManage, toggle }: { group: s
           <td className="sticky left-0 bg-card p-3"><code className="text-xs">{p}</code></td>
           {roles.map((r) => (
             <td key={r.key} className="p-3 text-center">
-              <Checkbox checked={state[r.key].has(p)} onCheckedChange={() => toggle(r.key, p)} disabled={!canManage || r.key === "SUPER_ADMIN"} aria-label={`${r.name}: ${p}`} />
+              <Checkbox checked={state[r.key].has(p)} onCheckedChange={() => toggle(r.key, p)} disabled={!canManage || r.key === "PLATFORM_OWNER"} aria-label={`${r.name}: ${p}`} />
             </td>
           ))}
         </tr>

@@ -6,6 +6,7 @@ import { DigitalTicket } from "@/components/site/digital-ticket"
 import { StaggerGroup, StaggerItem } from "@/components/motion"
 import { getTicketByNumber, qrDataUrl } from "@/server/services/tickets"
 import { getCurrentCustomer, getCurrentUser } from "@/server/auth/session"
+import { canInArena } from "@/server/tenant/authorization"
 import { ticketAccessKey, toPublicTicket } from "@/server/serializers"
 import { safeEqual } from "@/server/auth/tokens"
 import { AppError } from "@/server/http/errors"
@@ -25,7 +26,7 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
     throw err
   }
   const [customer, user] = await Promise.all([getCurrentCustomer(), getCurrentUser()])
-  const allowed = (customer && customer.id === detail.ticket.customerId) || (user && user.permissions.includes("tickets.view")) || (k && safeEqual(k, ticketAccessKey(detail.ticket.ticketNumber)))
+  const allowed = (customer && customer.id === detail.ticket.customerId) || (user && canInArena(user, detail.ticket.arenaId, "tickets.view")) || (k && safeEqual(k, ticketAccessKey(detail.ticket.ticketNumber)))
 
   if (!allowed) {
     return (
@@ -39,7 +40,7 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
   }
 
   const ticket = toPublicTicket(detail)
-  const qr = await qrDataUrl(detail.ticket.qrToken)
+  const qr = await qrDataUrl(detail.ticket)
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">

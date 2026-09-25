@@ -10,13 +10,15 @@ import { formatDate, formatMoney, formatTimeRange } from "@/lib/format"
 import { getSessionWithTeams } from "@/server/services/sessions"
 import { toPublicSession, toPublicTeams } from "@/server/serializers"
 import { AppError } from "@/server/http/errors"
+import { requirePublicTenantForPage } from "@/server/tenant"
 
 export const dynamic = "force-dynamic"
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   try {
-    const { session } = await getSessionWithTeams(id)
+    const tenant = await requirePublicTenantForPage()
+    const { session } = await getSessionWithTeams(tenant.arenaId, id)
     return { title: session.title, description: `${formatDate(session.startsAt)} at ${session.venue}` }
   } catch {
     return { title: "Session not found" }
@@ -27,7 +29,7 @@ export default async function SessionDetailsPage({ params }: { params: Promise<{
   const { id } = await params
   let data: Awaited<ReturnType<typeof getSessionWithTeams>>
   try {
-    data = await getSessionWithTeams(id)
+    data = await getSessionWithTeams((await requirePublicTenantForPage()).arenaId, id)
   } catch (err) {
     if (err instanceof AppError && err.code === "SESSION_NOT_FOUND") notFound()
     throw err

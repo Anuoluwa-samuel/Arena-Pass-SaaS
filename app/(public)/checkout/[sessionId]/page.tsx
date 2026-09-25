@@ -6,6 +6,7 @@ import { getSessionWithTeams } from "@/server/services/sessions"
 import { getCurrentCustomer } from "@/server/auth/session"
 import { toPublicSession, toPublicTeams } from "@/server/serializers"
 import { AppError } from "@/server/http/errors"
+import { requirePublicTenantForPage } from "@/server/tenant"
 
 export const dynamic = "force-dynamic"
 export const metadata = { title: "Checkout" }
@@ -14,7 +15,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ sessi
   const { sessionId } = await params
   let data: Awaited<ReturnType<typeof getSessionWithTeams>>
   try {
-    data = await getSessionWithTeams(sessionId)
+    data = await getSessionWithTeams((await requirePublicTenantForPage()).arenaId, sessionId)
   } catch (err) {
     if (err instanceof AppError && err.code === "SESSION_NOT_FOUND") notFound()
     throw err

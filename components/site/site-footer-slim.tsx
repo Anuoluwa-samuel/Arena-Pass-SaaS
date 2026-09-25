@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { initials } from "@/lib/format"
 
 const LINKS = [
   { href: "/sessions", label: "Sessions" },
@@ -18,7 +19,7 @@ export function SiteFooterSlim({ siteName }: { siteName: string }) {
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-6 max-sm:gap-3 max-sm:py-5 sm:flex-row sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-2.5">
           <div className="flex size-7 items-center justify-center rounded-md bg-primary">
-            <span className="text-[0.625rem] font-black text-primary-foreground">AP</span>
+            <span className="text-[0.625rem] font-black text-primary-foreground">{initials(siteName)}</span>
           </div>
           <span className="label-mono text-muted-foreground">
             © {new Date().getFullYear()} {siteName}

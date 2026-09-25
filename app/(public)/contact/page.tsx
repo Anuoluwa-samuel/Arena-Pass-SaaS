@@ -2,12 +2,13 @@ import { ArrowUpRight, Mail, MapPin, Phone, Instagram, Twitter, MessageCircle } 
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion"
 import { PageHeader } from "@/components/shared/page-header"
 import { getPublicSiteContent } from "@/server/services/public-content"
+import { requirePublicTenantForPage } from "@/server/tenant"
 
 export const dynamic = "force-dynamic"
 export const metadata = { title: "Contact" }
 
 export default async function ContactPage() {
-  const { contact, arena } = await getPublicSiteContent()
+  const { contact, arena } = await getPublicSiteContent((await requirePublicTenantForPage()).arenaId)
   const rows = [
     contact.email && { icon: Mail, label: "Email", value: contact.email, href: `mailto:${contact.email}` },
     contact.phone && { icon: Phone, label: "Phone", value: contact.phone, href: `tel:${contact.phone}` },

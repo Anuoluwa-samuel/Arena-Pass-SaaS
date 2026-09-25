@@ -7,7 +7,7 @@ import { TicketStatusBadge } from "@/components/shared/status-badge"
 import { StatCard } from "@/components/admin/stat-card"
 import { DataTable } from "@/components/admin/data-table"
 import { CustomerEditor } from "@/components/admin/customer-editor"
-import { requirePermission } from "@/server/auth/rbac"
+import { requireArenaPermission } from "@/server/auth/rbac"
 import { getCustomerDetail } from "@/server/services/customers"
 import { AppError } from "@/server/http/errors"
 import { formatDateTime, formatMoney } from "@/lib/format"
@@ -16,11 +16,11 @@ import { GENDER_LABELS, POSITION_LABELS, SKILL_LABELS, type Gender, type Positio
 export const metadata = { title: "Customer" }
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requirePermission("customers.view")
+  const { arena } = await requireArenaPermission("customers.view")
   const { id } = await params
   let data: Awaited<ReturnType<typeof getCustomerDetail>>
   try {
-    data = await getCustomerDetail(id)
+    data = await getCustomerDetail(arena.arenaId, id)
   } catch (err) {
     if (err instanceof AppError && err.code === "NOT_FOUND") notFound()
     throw err
@@ -39,7 +39,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       </div>
       <div className="grid gap-6 lg:grid-cols-[1fr_1.6fr]">
         <div className="space-y-6">
-          <CustomerEditor customer={{ id: customer.id, name: customer.name, phone: customer.phone ?? "", isActive: customer.isActive }} canManage={user.permissions.includes("customers.manage")} />
+          <CustomerEditor customer={{ id: customer.id, name: customer.name, phone: customer.phone ?? "", isActive: customer.isActive }} canManage={arena.permissions.includes("customers.manage")} />
           <Card>
             <CardHeader><CardTitle className="text-base">Player profile</CardTitle></CardHeader>
             <CardContent>

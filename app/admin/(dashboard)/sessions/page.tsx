@@ -8,19 +8,19 @@ import { SessionStatusBadge } from "@/components/shared/status-badge"
 import { DataTable } from "@/components/admin/data-table"
 import { FilterTabs, Pagination, SearchBox } from "@/components/admin/list-toolbar"
 import { SessionRowActions } from "@/components/admin/session-row-actions"
-import { requirePermission } from "@/server/auth/rbac"
+import { requireArenaPermission } from "@/server/auth/rbac"
 import { listSessions, syncSessionLifecycle } from "@/server/services/sessions"
 import { formatDateTime, formatMoney } from "@/lib/format"
 
 export const metadata = { title: "Sessions" }
 
 export default async function AdminSessionsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const user = await requirePermission("sessions.view")
+  const { arena } = await requireArenaPermission("sessions.view")
   const sp = await searchParams
   await syncSessionLifecycle()
   const status = sp.status ?? "all"
-  const result = await listSessions({ arenaId: user.arenaId ?? undefined, status, q: sp.q, page: Number(sp.page ?? 1), pageSize: 20, order: status === "completed" || status === "CANCELLED" ? "desc" : "asc" })
-  const canManage = user.permissions.includes("sessions.manage")
+  const result = await listSessions({ arenaId: arena.arenaId, status, q: sp.q, page: Number(sp.page ?? 1), pageSize: 20, order: status === "completed" || status === "CANCELLED" ? "desc" : "asc" })
+  const canManage = arena.permissions.includes("sessions.manage")
 
   return (
     <div className="space-y-6">

@@ -86,8 +86,9 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   {
     label: "Platform",
     items: [
-      { href: "/admin/administrators", label: "Administrators", icon: "shield", permission: "users.view" },
-      { href: "/admin/roles", label: "Roles & permissions", icon: "key-round", permission: "users.view" },
+      { href: "/admin/onboarding", label: "Set up", icon: "rocket", permission: "settings.view" },
+      { href: "/admin/administrators", label: "Staff", icon: "shield", permission: "staff.view" },
+      { href: "/admin/roles", label: "Roles & permissions", icon: "key-round", permission: "platform.roles.manage" },
       { href: "/admin/notifications", label: "Notifications", icon: "bell", permission: "notifications.view" },
       { href: "/admin/settings", label: "System settings", icon: "settings", permission: "settings.view" },
       { href: "/admin/audit-logs", label: "Audit logs", icon: "scroll-text", permission: "audit.view" },

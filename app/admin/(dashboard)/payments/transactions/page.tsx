@@ -5,16 +5,16 @@ import { EmptyState } from "@/components/shared/empty-state"
 import { ToneBadge } from "@/components/shared/status-badge"
 import { DataTable } from "@/components/admin/data-table"
 import { Pagination } from "@/components/admin/list-toolbar"
-import { requirePermission } from "@/server/auth/rbac"
+import { requireArenaPermission } from "@/server/auth/rbac"
 import { listTransactions } from "@/server/services/payments"
 import { formatDateTime, formatMoney } from "@/lib/format"
 
 export const metadata = { title: "Transactions" }
 
 export default async function TransactionsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requirePermission("payments.view")
+  const { arena } = await requireArenaPermission("payments.view")
   const sp = await searchParams
-  const result = await listTransactions({ page: Number(sp.page ?? 1), pageSize: 50 })
+  const result = await listTransactions(arena.arenaId, { page: Number(sp.page ?? 1), pageSize: 50 })
   return (
     <div className="space-y-6">
       <PageHeader title="Transactions" description="Immutable ledger of charges and refunds." />

@@ -6,18 +6,17 @@ import { EmptyState } from "@/components/shared/empty-state"
 import { DataTable } from "@/components/admin/data-table"
 import { Pagination, SearchBox } from "@/components/admin/list-toolbar"
 import { ToneBadge } from "@/components/shared/status-badge"
-import { requirePermission } from "@/server/auth/rbac"
+import { requireArenaPermission } from "@/server/auth/rbac"
 import { listCustomers } from "@/server/services/customers"
 import { getSettings } from "@/server/services/settings"
-import { resolveArenaId } from "@/server/http/admin"
 import { formatMoney, formatShortDate } from "@/lib/format"
 
 export const metadata = { title: "Customers" }
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const user = await requirePermission("customers.view")
+  const { arena } = await requireArenaPermission("customers.view")
   const sp = await searchParams
-  const [result, settings] = await Promise.all([listCustomers({ q: sp.q, page: Number(sp.page ?? 1), pageSize: 25 }), getSettings(await resolveArenaId(user))])
+  const [result, settings] = await Promise.all([listCustomers(arena.arenaId, { q: sp.q, page: Number(sp.page ?? 1), pageSize: 25 }), getSettings(arena.arenaId)])
   return (
     <div className="space-y-6">
       <PageHeader title="Customers" description="Everyone who has booked or created an account." />

@@ -1,11 +1,11 @@
 import { ok } from "@/server/http/response"
 import { parseJson } from "@/server/http/request"
-import { adminRoute, actorFrom, resolveArenaId } from "@/server/http/admin"
+import { adminRoute, actorFrom } from "@/server/http/admin"
 import { listBanners, createBanner, bannerInputSchema } from "@/server/services/cms"
 
-export const GET = adminRoute("cms.view", async (_req, _ctx, user) => ok(await listBanners(await resolveArenaId(user))))
+export const GET = adminRoute("cms.view", async (_req, _ctx, user, arena) => ok(await listBanners(arena.arenaId)))
 
-export const POST = adminRoute("cms.manage", async (req, _ctx, user) => {
+export const POST = adminRoute("cms.manage", async (req, _ctx, user, arena) => {
   const input = await parseJson(req, bannerInputSchema)
-  return ok(await createBanner(await resolveArenaId(user), input, { actor: actorFrom(user, req) }), { status: 201, message: "Created" })
+  return ok(await createBanner(arena.arenaId, input, { actor: actorFrom(user, req) }), { status: 201, message: "Created" })
 })

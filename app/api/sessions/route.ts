@@ -2,12 +2,15 @@ import { route, ok } from "@/server/http/response"
 import { parseQuery } from "@/server/http/request"
 import { sessionListQuerySchema } from "@/lib/validation/sessions"
 import { listSessions } from "@/server/services/sessions"
-import { getDefaultArena } from "@/server/services/arenas"
+import { requirePublicTenantFromRequest } from "@/server/tenant"
 import { toPublicSession } from "@/server/serializers"
 
 export const GET = route(async (req) => {
   const q = parseQuery(req, sessionListQuerySchema)
-  const arena = await getDefaultArena()
-  const result = await listSessions({ arenaId: arena.id, publicOnly: true, q: q.q, from: q.from, to: q.to, page: q.page, pageSize: q.pageSize })
-  return ok(result.items.map(toPublicSession), { meta: result.meta, headers: { "Cache-Control": "public, max-age=15, stale-while-revalidate=60" } })
+  const tenant = await requirePublicTenantFromRequest(req)
+  const result = await listSessions({ arenaId: tenant.arenaId, publicOnly: true, q: q.q, from: q.from, to: q.to, page: q.page, pageSize: q.pageSize })
+  return ok(result.items.map(toPublicSession), {
+    meta: result.meta,
+    headers: { "Cache-Control": "public, max-age=15, stale-while-revalidate=60", Vary: "Host, X-Arena-Slug" },
+  })
 })

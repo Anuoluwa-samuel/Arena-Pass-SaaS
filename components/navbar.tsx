@@ -19,6 +19,7 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle"
 import { cn } from "@/lib/utils"
 import { DURATION, EASE_OUT } from "@/lib/motion"
+import { initials } from "@/lib/format"
 
 /** Full-screen auth pages: no navbar, the card's logo links home. */
 const AUTH_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password"]
@@ -26,9 +27,11 @@ const AUTH_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password"]
 interface NavbarProps {
   customer?: { name: string } | null
   siteName?: string
+  /** The arena's own logo. Falls back to its initials rather than the platform's mark. */
+  logoUrl?: string | null
 }
 
-export function Navbar({ customer = null, siteName = "Arena Pass" }: NavbarProps) {
+export function Navbar({ customer = null, siteName = "Arena Pass", logoUrl = null }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [hidden, setHidden] = useState(false)
@@ -110,9 +113,18 @@ export function Navbar({ customer = null, siteName = "Arena Pass" }: NavbarProps
             <motion.div
               whileHover={reduce ? undefined : { rotate: -8, scale: 1.06 }}
               transition={{ type: "spring", stiffness: 400, damping: 15 }}
-              className="flex size-9 items-center justify-center rounded-lg bg-primary shadow-[0_0_24px_-6px_var(--primary)]"
+              className={
+                logoUrl
+                  ? "flex size-9 items-center justify-center overflow-hidden rounded-lg"
+                  : "flex size-9 items-center justify-center rounded-lg bg-primary shadow-[0_0_24px_-6px_var(--primary)]"
+              }
             >
-              <span className="text-sm font-black tracking-tight text-primary-foreground">AP</span>
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- tenant logos are arbitrary uploaded URLs, not build-time assets
+                <img src={logoUrl} alt="" className="size-full object-contain" />
+              ) : (
+                <span className="text-sm font-black tracking-tight text-primary-foreground">{initials(siteName)}</span>
+              )}
             </motion.div>
             <span className="text-lg font-semibold tracking-tight">{siteName}</span>
           </Link>

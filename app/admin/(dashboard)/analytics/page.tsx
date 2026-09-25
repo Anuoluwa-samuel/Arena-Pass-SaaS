@@ -4,8 +4,7 @@ import { PageHeader } from "@/components/shared/page-header"
 import { StatCard } from "@/components/admin/stat-card"
 import { FilterTabs } from "@/components/admin/list-toolbar"
 import { HorizontalBars, Meter, TimeSeriesChart } from "@/components/admin/charts"
-import { requirePermission } from "@/server/auth/rbac"
-import { resolveArenaId } from "@/server/http/admin"
+import { requireArenaPermission } from "@/server/auth/rbac"
 import { getDashboardOverview } from "@/server/services/analytics"
 import { getSettings } from "@/server/services/settings"
 import { formatMoney, formatShortDate } from "@/lib/format"
@@ -13,10 +12,10 @@ import { formatMoney, formatShortDate } from "@/lib/format"
 export const metadata = { title: "Analytics" }
 
 export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
-  const user = await requirePermission("analytics.view")
+  const { arena } = await requireArenaPermission("analytics.view")
   const { days: d } = await searchParams
   const days = [7, 30, 90, 180].includes(Number(d)) ? Number(d) : 30
-  const arenaId = await resolveArenaId(user)
+  const arenaId = arena.arenaId
   const [o, settings] = await Promise.all([getDashboardOverview(arenaId, { days }), getSettings(arenaId)])
   const currency = settings.currency
   const avg = o.kpis.periodTickets ? Math.round(o.kpis.periodRevenue / o.kpis.periodTickets) : 0

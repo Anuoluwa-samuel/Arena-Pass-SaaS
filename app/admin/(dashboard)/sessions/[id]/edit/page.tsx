@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import { PageHeader } from "@/components/shared/page-header"
 import { SessionForm } from "@/components/admin/session-form"
-import { requirePermission } from "@/server/auth/rbac"
+import { requireArenaPermission } from "@/server/auth/rbac"
 import { getSessionById } from "@/server/services/sessions"
 import { getSettings } from "@/server/services/settings"
 import { AppError } from "@/server/http/errors"
@@ -10,11 +10,11 @@ import { toDatetimeLocalValue } from "@/lib/format"
 export const metadata = { title: "Edit session" }
 
 export default async function EditSessionPage({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermission("sessions.manage")
+  const { arena } = await requireArenaPermission("sessions.manage")
   const { id } = await params
   let session
   try {
-    session = await getSessionById(id, { includeDraft: true })
+    session = await getSessionById(arena.arenaId, id, { includeDraft: true })
   } catch (err) {
     if (err instanceof AppError && err.code === "SESSION_NOT_FOUND") notFound()
     throw err

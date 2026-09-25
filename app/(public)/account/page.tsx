@@ -12,6 +12,7 @@ import { getCustomerProfile } from "@/server/services/profile"
 import { getPublicSessions } from "@/server/services/public-content"
 import { listTickets } from "@/server/services/tickets"
 import { formatShortDate, formatTimeRange } from "@/lib/format"
+import { requirePublicTenantForPage } from "@/server/tenant"
 
 export const dynamic = "force-dynamic"
 export const metadata = { title: "Home" }
@@ -29,7 +30,12 @@ export default async function AccountHomePage() {
   const customer = await getCurrentCustomer()
   if (!customer) redirect("/login?next=/account")
 
-  const [profile, { items: tickets }, sessions] = await Promise.all([getCustomerProfile(customer.id), listTickets({ customerId: customer.id, pageSize: 100 }), getPublicSessions()])
+  const tenant = await requirePublicTenantForPage()
+  const [profile, { items: tickets }, sessions] = await Promise.all([
+    getCustomerProfile(customer.id),
+    listTickets(tenant.arenaId, { customerId: customer.id, pageSize: 100 }),
+    getPublicSessions(tenant.arenaId),
+  ])
   // eslint-disable-next-line react-hooks/purity -- request-time clock in a server component
   const now = Date.now()
   const upcoming = tickets
