@@ -48,7 +48,10 @@ export async function updateCustomerProfile(customerId: string, input: ProfileIn
   const existing = await loadCustomer(customerId)
   const username = input.username ?? null
   if (username && username !== existing.username) {
-    const clash = await database.query.customers.findFirst({ where: and(sql`lower(${schema.customers.username}) = ${username}`, ne(schema.customers.id, customerId)) })
+    // Handles are unique within a storefront, not across the platform.
+    const clash = await database.query.customers.findFirst({
+      where: and(sql`lower(${schema.customers.username}) = ${username}`, eq(schema.customers.arenaId, existing.arenaId!), ne(schema.customers.id, customerId)),
+    })
     if (clash) throw usernameTaken()
   }
   try {

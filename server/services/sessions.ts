@@ -1,5 +1,6 @@
 import "server-only"
 import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm"
+import { forArena } from "@/server/db/scoped"
 import { db, schema, type DbExecutor } from "@/server/db"
 import { AppError, notFound } from "@/server/http/errors"
 import { computeCapacity } from "@/lib/domain/constants"
@@ -21,9 +22,10 @@ const notDeleted = isNull(schema.sessions.deletedAt)
 // ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
-export async function getSessionById(id: string, opts: { includeDraft?: boolean } = {}) {
+export async function getSessionById(arenaId: string, id: string, opts: { includeDraft?: boolean } = {}) {
+  const scope = forArena(arenaId)
   const database = await db()
-  let s = await database.query.sessions.findFirst({ where: and(eq(schema.sessions.id, id), notDeleted) })
+  let s = await database.query.sessions.findFirst({ where: scope.owns(schema.sessions, eq(schema.sessions.id, id), notDeleted) })
   if (!s) throw new AppError("SESSION_NOT_FOUND", "Session not found")
   if (!opts.includeDraft && s.status === "DRAFT") throw new AppError("SESSION_NOT_FOUND", "Session not found")
   // Holds count toward "full", so free any that have timed out before deriving status:
@@ -35,9 +37,10 @@ export async function getSessionById(id: string, opts: { includeDraft?: boolean 
   return withStatus(s)
 }
 
-export async function getSessionWithTeams(id: string, opts: { includeDraft?: boolean } = {}) {
+export async function getSessionWithTeams(arenaId: string, id: string, opts: { includeDraft?: boolean } = {}) {
+  const scope = forArena(arenaId)
   const database = await db()
-  const session = await getSessionById(id, opts)
+  const session = await getSessionById(scope.arenaId, id, opts)
   const teamRows = await database.query.teams.findMany({
     where: eq(schema.teams.sessionId, id),
     orderBy: [asc(schema.teams.teamNumber)],
@@ -54,7 +57,8 @@ export async function getSessionWithTeams(id: string, opts: { includeDraft?: boo
 }
 
 export interface ListSessionsOptions {
-  arenaId?: string
+  /** Required. A listing without an arena would span tenants. */
+  arenaId: string
   /** Public listings exclude drafts, cancelled and past sessions. */
   publicOnly?: boolean
   status?: string
@@ -66,7 +70,7 @@ export interface ListSessionsOptions {
   order?: "asc" | "desc"
 }
 
-export async function listSessions(opts: ListSessionsOptions = {}) {
+export async function listSessions(opts: ListSessionsOptions) {
   // Throttled: keeps list availability honest even when the housekeeping cron is late or absent.
   await sweepExpiredHolds()
   const database = await db()
@@ -125,14 +129,26 @@ function toRow(input: SessionInput, arenaId: string, currency: string) {
   }
 }
 
-/** Generates the team rows and the full grid of player slots for a session. */
-export async function generateTeamsAndSlots(ex: DbExecutor, sessionId: string, teamsCount: number, playersPerTeam: number) {
+/**
+ * Generates the team rows and the full grid of player slots for a session.
+ *
+ * `arenaId` is carried down from the session rather than left to be derived:
+ * the grid is the hottest thing the booking path reads, and a slot that knows
+ * its own arena can be filtered without a join.
+ */
+export async function generateTeamsAndSlots(
+  ex: DbExecutor,
+  arenaId: string,
+  sessionId: string,
+  teamsCount: number,
+  playersPerTeam: number
+) {
   const teamRows = await ex
     .insert(schema.teams)
-    .values(Array.from({ length: teamsCount }, (_, i) => ({ sessionId, teamNumber: i + 1, name: `Team ${i + 1}` })))
+    .values(Array.from({ length: teamsCount }, (_, i) => ({ arenaId, sessionId, teamNumber: i + 1, name: `Team ${i + 1}` })))
     .returning()
   const slotValues = teamRows.flatMap((t) =>
-    Array.from({ length: playersPerTeam }, (_, j) => ({ sessionId, teamId: t.id, teamNumber: t.teamNumber, slotNumber: j + 1 }))
+    Array.from({ length: playersPerTeam }, (_, j) => ({ arenaId, sessionId, teamId: t.id, teamNumber: t.teamNumber, slotNumber: j + 1 }))
   )
   await ex.insert(schema.sessionSlots).values(slotValues)
 }
@@ -150,7 +166,7 @@ export async function createSession(input: SessionInput, ctx: { arenaId: string;
         createdBy: ctx.actor.type === "user" ? ctx.actor.id ?? null : null,
       })
       .returning()
-    await generateTeamsAndSlots(tx, row.id, row.teamsCount, row.playersPerTeam)
+    await generateTeamsAndSlots(tx, ctx.arenaId, row.id, row.teamsCount, row.playersPerTeam)
     return row
   })
   await recordAudit(ctx.actor, {
@@ -164,10 +180,11 @@ export async function createSession(input: SessionInput, ctx: { arenaId: string;
   return withStatus(session)
 }
 
-export async function updateSession(id: string, input: SessionInput, ctx: { actor: AuditActor }) {
+export async function updateSession(arenaId: string, id: string, input: SessionInput, ctx: { actor: AuditActor }) {
+  const scope = forArena(arenaId)
   const database = await db()
   const updated = await database.transaction(async (tx) => {
-    const [existing] = await tx.select().from(schema.sessions).where(and(eq(schema.sessions.id, id), notDeleted)).for("update")
+    const [existing] = await tx.select().from(schema.sessions).where(scope.owns(schema.sessions, eq(schema.sessions.id, id), notDeleted)).for("update")
     if (!existing) throw new AppError("SESSION_NOT_FOUND", "Session not found")
     if (existing.status === "CANCELLED" || existing.status === "COMPLETED")
       throw new AppError("CONFLICT", "Completed or cancelled sessions cannot be edited")
@@ -184,7 +201,7 @@ export async function updateSession(id: string, input: SessionInput, ctx: { acto
     if (capacityChanged) {
       await tx.delete(schema.sessionSlots).where(eq(schema.sessionSlots.sessionId, id))
       await tx.delete(schema.teams).where(eq(schema.teams.sessionId, id))
-      await generateTeamsAndSlots(tx, id, row.teamsCount, row.playersPerTeam)
+      await generateTeamsAndSlots(tx, scope.arenaId, id, row.teamsCount, row.playersPerTeam)
     }
     return row
   })
@@ -198,34 +215,37 @@ export async function updateSession(id: string, input: SessionInput, ctx: { acto
   return withStatus(updated)
 }
 
-export async function publishSession(id: string, ctx: { actor: AuditActor }) {
+export async function publishSession(arenaId: string, id: string, ctx: { actor: AuditActor }) {
+  const scope = forArena(arenaId)
   const database = await db()
   const [row] = await database
     .update(schema.sessions)
     .set({ status: "PUBLISHED", publishedAt: new Date(), updatedAt: new Date() })
-    .where(and(eq(schema.sessions.id, id), eq(schema.sessions.status, "DRAFT"), notDeleted))
+    .where(scope.owns(schema.sessions, eq(schema.sessions.id, id), eq(schema.sessions.status, "DRAFT"), notDeleted))
     .returning()
   if (!row) throw new AppError("CONFLICT", "Only draft sessions can be published")
   await recordAudit(ctx.actor, { action: "session.publish", entityType: "session", entityId: id, arenaId: row.arenaId, description: `Published session "${row.title}"` })
   return withStatus(row)
 }
 
-export async function unpublishSession(id: string, ctx: { actor: AuditActor }) {
+export async function unpublishSession(arenaId: string, id: string, ctx: { actor: AuditActor }) {
+  const scope = forArena(arenaId)
   const database = await db()
   const [row] = await database
     .update(schema.sessions)
     .set({ status: "DRAFT", updatedAt: new Date() })
-    .where(and(eq(schema.sessions.id, id), eq(schema.sessions.status, "PUBLISHED"), eq(schema.sessions.bookedCount, 0), notDeleted))
+    .where(scope.owns(schema.sessions, eq(schema.sessions.id, id), eq(schema.sessions.status, "PUBLISHED"), eq(schema.sessions.bookedCount, 0), notDeleted))
     .returning()
   if (!row) throw new AppError("CONFLICT", "Only published sessions with no bookings can be unpublished")
   await recordAudit(ctx.actor, { action: "session.unpublish", entityType: "session", entityId: id, arenaId: row.arenaId, description: `Unpublished session "${row.title}"` })
   return withStatus(row)
 }
 
-export async function cancelSession(id: string, reason: string, ctx: { actor: AuditActor }) {
+export async function cancelSession(arenaId: string, id: string, reason: string, ctx: { actor: AuditActor }) {
+  const scope = forArena(arenaId)
   const database = await db()
   const row = await database.transaction(async (tx) => {
-    const [existing] = await tx.select().from(schema.sessions).where(and(eq(schema.sessions.id, id), notDeleted)).for("update")
+    const [existing] = await tx.select().from(schema.sessions).where(scope.owns(schema.sessions, eq(schema.sessions.id, id), notDeleted)).for("update")
     if (!existing) throw new AppError("SESSION_NOT_FOUND", "Session not found")
     if (existing.status === "CANCELLED") return existing
     if (existing.status === "COMPLETED") throw new AppError("CONFLICT", "Completed sessions cannot be cancelled")
@@ -257,12 +277,13 @@ export async function cancelSession(id: string, reason: string, ctx: { actor: Au
   return withStatus(row)
 }
 
-export async function deleteSession(id: string, ctx: { actor: AuditActor }) {
+export async function deleteSession(arenaId: string, id: string, ctx: { actor: AuditActor }) {
+  const scope = forArena(arenaId)
   const database = await db()
   const [row] = await database
     .update(schema.sessions)
     .set({ deletedAt: new Date(), updatedAt: new Date() })
-    .where(and(eq(schema.sessions.id, id), eq(schema.sessions.bookedCount, 0), notDeleted))
+    .where(scope.owns(schema.sessions, eq(schema.sessions.id, id), eq(schema.sessions.bookedCount, 0), notDeleted))
     .returning()
   if (!row) throw new AppError("CONFLICT", "Sessions with confirmed bookings cannot be deleted; cancel them instead")
   await recordAudit(ctx.actor, { action: "session.delete", entityType: "session", entityId: id, arenaId: row.arenaId, description: `Deleted session "${row.title}"` })
@@ -274,6 +295,32 @@ export async function deleteSession(id: string, ctx: { actor: AuditActor }) {
  * so status filters in SQL stay accurate. Idempotent; called by the cron
  * endpoint and opportunistically by admin reads.
  */
+/**
+ * Adds someone to a session's waiting list. The session is resolved inside the
+ * arena first, so a session id from another arena cannot be joined from here.
+ * Re-submitting the same email is a no-op rather than an error.
+ */
+export async function joinWaitlist(
+  arenaId: string,
+  sessionId: string,
+  input: { name: string; email: string; phone?: string | null }
+) {
+  const scope = forArena(arenaId)
+  const session = await getSessionById(scope.arenaId, sessionId)
+  const database = await db()
+  await database
+    .insert(schema.waitlistEntries)
+    .values({
+      arenaId: scope.arenaId,
+      sessionId: session.id,
+      name: input.name,
+      email: input.email.toLowerCase(),
+      phone: input.phone || null,
+    })
+    .onConflictDoNothing()
+}
+
+/** Platform-level cron: applies time-derived status transitions in every arena. */
 export async function syncSessionLifecycle() {
   const database = await db()
   const now = new Date()

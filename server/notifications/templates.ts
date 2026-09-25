@@ -93,6 +93,21 @@ export function passwordResetEmail(p: { appName: string; customerName: string; r
   return { subject, html, text }
 }
 
+export function emailVerificationEmail(p: { appName: string; customerName: string; verifyUrl: string; expiresInHours: number }) {
+  const subject = `Confirm your email for ${p.appName}`
+  const name = escapeHtml(p.customerName)
+  const html = layout(
+    "Confirm your email",
+    `<p style="color:#b5bac4;margin:0 0 20px">Hi ${name}, confirm this address so we can send you your tickets and session reminders.</p>
+    <a href="${p.verifyUrl}" style="display:block;background:#22c55e;color:#0f1115;text-decoration:none;text-align:center;padding:14px;border-radius:10px;font-weight:600">Confirm my email</a>
+    <p style="color:#8b919c;font-size:13px;margin-top:16px">This link expires in ${p.expiresInHours} hours and can only be used once. If you didn't create this account, you can ignore this email.</p>`,
+    p.appName,
+    `You are receiving this because an account was created at ${p.appName} with this email address.`
+  )
+  const text = `Hi ${p.customerName},\n\nConfirm your email for ${p.appName}: ${p.verifyUrl}\n\nThis link expires in ${p.expiresInHours} hours and can only be used once. If you didn't create this account, ignore this email.\n`
+  return { subject, html, text }
+}
+
 export function refundRequiredAdminEmail(p: { appName: string; customerName: string; customerEmail: string; sessionTitle: string; reference: string; amount: number; currency: string; paymentsUrl: string }) {
   const subject = `Action needed: refund ${formatMoney(p.amount, p.currency)} to ${p.customerName}`
   const html = layout(

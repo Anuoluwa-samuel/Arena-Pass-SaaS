@@ -2,12 +2,41 @@ import "server-only"
 import { and, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm"
 import QRCode from "qrcode"
 import { db, schema, rowsOf, type Transaction } from "@/server/db"
+import { forArena } from "@/server/db/scoped"
 import { env } from "@/server/env"
 import { AppError } from "@/server/http/errors"
-import { hmac, randomToken, safeEqual } from "@/server/auth/tokens"
+import { hmac, randomToken, safeEqual, sha256 } from "@/server/auth/tokens"
+import { assertTransition, isAdmissible } from "./ticket-state"
 import { recordAudit, type AuditActor } from "./audit"
 
 const QR_PREFIX = "AP1"
+
+/** How long after a session ends a ticket still admits, for late arrivals and stragglers. */
+const ADMISSION_GRACE_MS = 2 * 3_600_000
+
+/**
+ * A scanned code, reduced to something a human can recognise in the log
+ * without it being usable. A ticket number is not a credential, so it is kept
+ * whole; a QR payload keeps only its prefix and last four characters.
+ */
+function redactScan(scanned: string): string {
+  const value = scanned.trim()
+  if (/^AP-\d{4}-\d{6}$/i.test(value)) return value.toUpperCase()
+  if (value.startsWith(`${QR_PREFIX}.`)) return `${QR_PREFIX}.…${value.slice(-4)}`
+  return `…${value.slice(-4)}`
+}
+
+/**
+ * Each arena signs its QR codes with its own derived key.
+ *
+ * The token itself stays opaque — it carries no personal data and no arena id
+ * — but a code minted for one arena fails the signature check at another's
+ * gate, before any database lookup. Domain separation, not secrecy: the arena
+ * id is not sensitive, it simply must not be interchangeable.
+ */
+function qrKey(arenaId: string) {
+  return hmac(env.QR_SECRET, `qr:${arenaId}`)
+}
 
 /** Ticket numbers look like AP-2026-000124: year + zero-padded global sequence. */
 export async function nextTicketNumber(tx: Transaction) {
@@ -17,21 +46,27 @@ export async function nextTicketNumber(tx: Transaction) {
 }
 
 /** Opaque reference + HMAC. Contains no personal data; forgeries fail before a DB hit. */
-export function buildQrPayload(qrToken: string) {
-  return `${QR_PREFIX}.${qrToken}.${hmac(env.QR_SECRET, qrToken).slice(0, 22)}`
+export function buildQrPayload(arenaId: string, qrToken: string) {
+  return `${QR_PREFIX}.${qrToken}.${hmac(qrKey(arenaId), qrToken).slice(0, 22)}`
 }
 
-export function parseQrPayload(value: string): { qrToken: string } | null {
+/** Verifies the code against *this* arena's key. Null means "not ours". */
+export function parseQrPayload(arenaId: string, value: string): { qrToken: string } | null {
   const parts = value.trim().split(".")
   if (parts.length !== 3 || parts[0] !== QR_PREFIX) return null
   const [, token, sig] = parts
   if (!token || !sig) return null
-  const expected = hmac(env.QR_SECRET, token).slice(0, 22)
+  const expected = hmac(qrKey(arenaId), token).slice(0, 22)
   return safeEqual(sig, expected) ? { qrToken: token } : null
 }
 
-export async function qrDataUrl(qrToken: string) {
-  return QRCode.toDataURL(buildQrPayload(qrToken), { errorCorrectionLevel: "M", margin: 1, width: 320, color: { dark: "#0b0f14", light: "#ffffff" } })
+export async function qrDataUrl(ticket: Pick<schema.Ticket, "arenaId" | "qrToken">) {
+  return QRCode.toDataURL(buildQrPayload(ticket.arenaId, ticket.qrToken), {
+    errorCorrectionLevel: "M",
+    margin: 1,
+    width: 320,
+    color: { dark: "#0b0f14", light: "#ffffff" },
+  })
 }
 
 export function newQrToken() {
@@ -41,6 +76,13 @@ export function newQrToken() {
 // ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
+/**
+ * Ticket numbers are globally unique, so this lookup is deliberately not
+ * arena-scoped: it serves the public ticket link, where the reader proves
+ * access with the signed key, their own customer session, or staff permission
+ * *in the ticket's own arena*. The caller does that check — see
+ * `app/api/tickets/[ticketNumber]`.
+ */
 export async function getTicketByNumber(ticketNumber: string) {
   const database = await db()
   const ticket = await database.query.tickets.findFirst({ where: eq(schema.tickets.ticketNumber, ticketNumber) })
@@ -48,9 +90,10 @@ export async function getTicketByNumber(ticketNumber: string) {
   return hydrateTicket(ticket)
 }
 
-export async function getTicketById(id: string) {
+export async function getTicketById(arenaId: string, id: string) {
+  const scope = forArena(arenaId)
   const database = await db()
-  const ticket = await database.query.tickets.findFirst({ where: eq(schema.tickets.id, id) })
+  const ticket = await database.query.tickets.findFirst({ where: scope.owns(schema.tickets, eq(schema.tickets.id, id)) })
   if (!ticket) throw new AppError("TICKET_NOT_FOUND", "Ticket not found")
   return hydrateTicket(ticket)
 }
@@ -69,17 +112,21 @@ export async function hydrateTicket(ticket: schema.Ticket) {
 
 export type TicketDetail = Awaited<ReturnType<typeof hydrateTicket>>
 
-export async function listTickets(opts: { status?: string; sessionId?: string; customerId?: string; q?: string; page?: number; pageSize?: number } = {}) {
+export async function listTickets(
+  arenaId: string,
+  opts: { status?: string; sessionId?: string; customerId?: string; q?: string; page?: number; pageSize?: number } = {}
+) {
+  const scope = forArena(arenaId)
   const database = await db()
   const page = opts.page ?? 1
   const pageSize = opts.pageSize ?? 20
-  const where: SQL[] = []
+  const where: SQL[] = [eq(schema.tickets.arenaId, scope.arenaId)]
   if (opts.status && opts.status !== "all") where.push(eq(schema.tickets.status, opts.status as schema.Ticket["status"]))
   if (opts.sessionId) where.push(eq(schema.tickets.sessionId, opts.sessionId))
   if (opts.customerId) where.push(eq(schema.tickets.customerId, opts.customerId))
   if (opts.q)
     where.push(or(ilike(schema.tickets.ticketNumber, `%${opts.q}%`), ilike(schema.customers.name, `%${opts.q}%`), ilike(schema.customers.email, `%${opts.q}%`), ilike(schema.tickets.playerName, `%${opts.q}%`))!)
-  const condition = where.length ? and(...where) : undefined
+  const condition = and(...where)
   const base = database
     .select({
       ticket: schema.tickets,
@@ -115,50 +162,77 @@ export type ValidationOutcome =
  * it atomically marks the ticket USED; a second scan reports ALREADY_USED.
  */
 export async function validateTicket(
+  arenaId: string,
   scanned: string,
   opts: { mode: "check" | "admit"; expectedSessionId?: string; actor: AuditActor & { id: string } }
 ): Promise<ValidationOutcome> {
+  const scope = forArena(arenaId)
   const database = await db()
-  const parsed = parseQrPayload(scanned)
+  const parsed = parseQrPayload(scope.arenaId, scanned)
   const value = scanned.trim().toUpperCase()
+  // Scoped to the scanning arena: a valid ticket for a different arena is
+  // indistinguishable from a forged one at this gate, which is correct — it
+  // does not admit anybody here, and saying so would confirm it exists.
   const ticketRow = parsed
-    ? await database.query.tickets.findFirst({ where: eq(schema.tickets.qrToken, parsed.qrToken) })
+    ? await database.query.tickets.findFirst({ where: scope.owns(schema.tickets, eq(schema.tickets.qrToken, parsed.qrToken)) })
     : /^AP-\d{4}-\d{6}$/.test(value)
-      ? await database.query.tickets.findFirst({ where: eq(schema.tickets.ticketNumber, value) })
+      ? await database.query.tickets.findFirst({ where: scope.owns(schema.tickets, eq(schema.tickets.ticketNumber, value)) })
       : null
 
-  const log = (ticketId: string | null, sessionId: string | null, result: string) =>
-    database.insert(schema.ticketValidations).values({ ticketId, sessionId, validatedBy: opts.actor.id, result, scannedValue: scanned.slice(0, 200) })
+  // The scanned value is a live credential, so only a recognisable fragment is
+  // kept; the fingerprint lets repeated forgeries be correlated without
+  // storing anything that could admit somebody.
+  const log = (ticketId: string | null, sessionId: string | null, result: string, reason?: string) =>
+    database.insert(schema.ticketValidations).values({
+      arenaId: scope.arenaId,
+      ticketId,
+      sessionId,
+      validatedBy: opts.actor.id,
+      result,
+      reason: reason ?? null,
+      scannedValue: redactScan(scanned),
+      scannedFingerprint: sha256(scanned.trim()),
+    })
 
   if (!ticketRow) {
-    await log(null, opts.expectedSessionId ?? null, "INVALID")
+    // Unreadable, forged, or issued by another arena — indistinguishable here
+    // on purpose: saying which would confirm that a code exists somewhere.
+    await log(null, opts.expectedSessionId ?? null, "INVALID", "Not a ticket for this arena")
     return { result: "INVALID" }
   }
 
   const detail = await hydrateTicket(ticketRow)
   if (opts.expectedSessionId && ticketRow.sessionId !== opts.expectedSessionId) {
-    await log(ticketRow.id, ticketRow.sessionId, "WRONG_SESSION")
+    await log(ticketRow.id, ticketRow.sessionId, "WRONG_SESSION", "Ticket is for a different session")
     return { result: "WRONG_SESSION", ticket: detail }
   }
   if (ticketRow.status === "USED") {
-    await log(ticketRow.id, ticketRow.sessionId, "ALREADY_USED")
+    await log(ticketRow.id, ticketRow.sessionId, "ALREADY_USED", `Already admitted${ticketRow.usedAt ? ` at ${ticketRow.usedAt.toISOString()}` : ""}`)
     return { result: "ALREADY_USED", ticket: detail }
   }
-  if (ticketRow.status !== "CONFIRMED") {
-    await log(ticketRow.id, ticketRow.sessionId, "NOT_VALID")
-    return { result: "NOT_VALID", ticket: detail, reason: `Ticket is ${ticketRow.status.toLowerCase()}` }
+  if (!isAdmissible(ticketRow.status)) {
+    const reason = `Ticket is ${ticketRow.status.toLowerCase()}`
+    await log(ticketRow.id, ticketRow.sessionId, "NOT_VALID", reason)
+    return { result: "NOT_VALID", ticket: detail, reason }
   }
   if (detail.session.status === "CANCELLED") {
-    await log(ticketRow.id, ticketRow.sessionId, "NOT_VALID")
+    await log(ticketRow.id, ticketRow.sessionId, "NOT_VALID", "Session was cancelled")
     return { result: "NOT_VALID", ticket: detail, reason: "Session was cancelled" }
   }
-  if (new Date() > new Date(detail.session.endsAt.getTime() + 2 * 3_600_000)) {
-    await log(ticketRow.id, ticketRow.sessionId, "NOT_VALID")
+  const now = new Date()
+  // The ticket's own expiry, which outlives the session window and is what a
+  // refunded-then-reissued ticket carries.
+  if (ticketRow.expiresAt <= now) {
+    await log(ticketRow.id, ticketRow.sessionId, "NOT_VALID", "Ticket has expired")
+    return { result: "NOT_VALID", ticket: detail, reason: "Ticket has expired" }
+  }
+  if (now > new Date(detail.session.endsAt.getTime() + ADMISSION_GRACE_MS)) {
+    await log(ticketRow.id, ticketRow.sessionId, "NOT_VALID", "Session has ended")
     return { result: "NOT_VALID", ticket: detail, reason: "Session has ended" }
   }
 
   if (opts.mode === "check") {
-    await log(ticketRow.id, ticketRow.sessionId, "CHECK_VALID")
+    await log(ticketRow.id, ticketRow.sessionId, "CHECK_VALID", "Valid, not admitted")
     return { result: "VALID", ticket: detail }
   }
 
@@ -169,10 +243,12 @@ export async function validateTicket(
     .where(and(eq(schema.tickets.id, ticketRow.id), eq(schema.tickets.status, "CONFIRMED")))
     .returning()
   if (!used) {
-    await log(ticketRow.id, ticketRow.sessionId, "ALREADY_USED")
+    // Another scanner won the race. The loser reports ALREADY_USED, which is
+    // exactly what a second scan of the same code should say.
+    await log(ticketRow.id, ticketRow.sessionId, "ALREADY_USED", "Admitted by a simultaneous scan")
     return { result: "ALREADY_USED", ticket: await hydrateTicket((await database.query.tickets.findFirst({ where: eq(schema.tickets.id, ticketRow.id) }))!) }
   }
-  await log(ticketRow.id, ticketRow.sessionId, "ADMITTED")
+  await log(ticketRow.id, ticketRow.sessionId, "ADMITTED", "Admitted")
   await recordAudit(opts.actor, {
     action: "ticket.admit",
     entityType: "ticket",
@@ -184,12 +260,18 @@ export async function validateTicket(
 }
 
 /** Admin cancellation without refund (e.g. no-show policy); refunds go through payments. */
-export async function cancelTicket(id: string, reason: string, ctx: { actor: AuditActor }) {
+export async function cancelTicket(arenaId: string, id: string, reason: string, ctx: { actor: AuditActor }) {
+  const scope = forArena(arenaId)
   const database = await db()
   const row = await database.transaction(async (tx) => {
-    const [ticket] = await tx.select().from(schema.tickets).where(eq(schema.tickets.id, id)).for("update")
+    const [ticket] = await tx
+      .select()
+      .from(schema.tickets)
+      .where(and(eq(schema.tickets.id, id), eq(schema.tickets.arenaId, scope.arenaId)))
+      .for("update")
     if (!ticket) throw new AppError("TICKET_NOT_FOUND", "Ticket not found")
     if (ticket.status !== "CONFIRMED") throw new AppError("CONFLICT", `Ticket is already ${ticket.status.toLowerCase()}`)
+    assertTransition(ticket.status, "CANCELLED", `cancel ${ticket.ticketNumber}`)
     return releaseConfirmedTicket(tx, ticket, "CANCELLED", reason)
   })
   await recordAudit(ctx.actor, { action: "ticket.cancel", entityType: "ticket", entityId: id, arenaId: row.arenaId, description: `Cancelled ${row.ticketNumber}`, metadata: { reason } })

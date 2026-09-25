@@ -1,6 +1,7 @@
 import "server-only"
 import { and, asc, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm"
 import { z } from "zod"
+import { forArena } from "@/server/db/scoped"
 import { db, schema } from "@/server/db"
 import { AppError, notFound } from "@/server/http/errors"
 import { CMS_PAGE_SCHEMAS, type CmsContentBySlug } from "@/lib/cms/schemas"
@@ -93,17 +94,17 @@ export async function createService(arenaId: string, input: z.infer<typeof servi
   return row
 }
 
-export async function updateService(id: string, input: Partial<z.infer<typeof serviceInputSchema>>, ctx: { actor: AuditActor }) {
+export async function updateService(arenaId: string, id: string, input: Partial<z.infer<typeof serviceInputSchema>>, ctx: { actor: AuditActor }) {
   const database = await db()
-  const [row] = await database.update(schema.cmsServices).set({ ...input, icon: input.icon === "" ? null : input.icon, updatedAt: new Date() }).where(eq(schema.cmsServices.id, id)).returning()
+  const [row] = await database.update(schema.cmsServices).set({ ...input, icon: input.icon === "" ? null : input.icon, updatedAt: new Date() }).where(forArena(arenaId).owns(schema.cmsServices, eq(schema.cmsServices.id, id))).returning()
   if (!row) throw notFound("Service")
   await recordAudit(ctx.actor, { action: "cms.service.update", entityType: "cms_service", entityId: id, arenaId: row.arenaId, description: `Updated service "${row.title}"` })
   return row
 }
 
-export async function deleteService(id: string, ctx: { actor: AuditActor }) {
+export async function deleteService(arenaId: string, id: string, ctx: { actor: AuditActor }) {
   const database = await db()
-  const [row] = await database.delete(schema.cmsServices).where(eq(schema.cmsServices.id, id)).returning()
+  const [row] = await database.delete(schema.cmsServices).where(forArena(arenaId).owns(schema.cmsServices, eq(schema.cmsServices.id, id))).returning()
   if (!row) throw notFound("Service")
   await recordAudit(ctx.actor, { action: "cms.service.delete", entityType: "cms_service", entityId: id, arenaId: row.arenaId, description: `Deleted service "${row.title}"` })
 }
@@ -133,17 +134,17 @@ export async function createFaq(arenaId: string, input: z.infer<typeof faqInputS
   return row
 }
 
-export async function updateFaq(id: string, input: Partial<z.infer<typeof faqInputSchema>>, ctx: { actor: AuditActor }) {
+export async function updateFaq(arenaId: string, id: string, input: Partial<z.infer<typeof faqInputSchema>>, ctx: { actor: AuditActor }) {
   const database = await db()
-  const [row] = await database.update(schema.faqs).set({ ...input, updatedAt: new Date() }).where(eq(schema.faqs.id, id)).returning()
+  const [row] = await database.update(schema.faqs).set({ ...input, updatedAt: new Date() }).where(forArena(arenaId).owns(schema.faqs, eq(schema.faqs.id, id))).returning()
   if (!row) throw notFound("FAQ")
   await recordAudit(ctx.actor, { action: "cms.faq.update", entityType: "faq", entityId: id, arenaId: row.arenaId, description: `Updated FAQ "${row.question}"` })
   return row
 }
 
-export async function deleteFaq(id: string, ctx: { actor: AuditActor }) {
+export async function deleteFaq(arenaId: string, id: string, ctx: { actor: AuditActor }) {
   const database = await db()
-  const [row] = await database.delete(schema.faqs).where(eq(schema.faqs.id, id)).returning()
+  const [row] = await database.delete(schema.faqs).where(forArena(arenaId).owns(schema.faqs, eq(schema.faqs.id, id))).returning()
   if (!row) throw notFound("FAQ")
   await recordAudit(ctx.actor, { action: "cms.faq.delete", entityType: "faq", entityId: id, arenaId: row.arenaId, description: `Deleted FAQ "${row.question}"` })
 }
@@ -208,17 +209,17 @@ export async function createAnnouncement(arenaId: string, input: z.infer<typeof 
   return row
 }
 
-export async function updateAnnouncement(id: string, input: Partial<z.infer<typeof announcementInputSchema>>, ctx: { actor: AuditActor }) {
+export async function updateAnnouncement(arenaId: string, id: string, input: Partial<z.infer<typeof announcementInputSchema>>, ctx: { actor: AuditActor }) {
   const database = await db()
-  const [row] = await database.update(schema.announcements).set({ ...input, updatedAt: new Date() }).where(eq(schema.announcements.id, id)).returning()
+  const [row] = await database.update(schema.announcements).set({ ...input, updatedAt: new Date() }).where(forArena(arenaId).owns(schema.announcements, eq(schema.announcements.id, id))).returning()
   if (!row) throw notFound("Announcement")
   await recordAudit(ctx.actor, { action: "cms.announcement.update", entityType: "announcement", entityId: id, arenaId: row.arenaId, description: `Updated announcement "${row.title}"` })
   return row
 }
 
-export async function deleteAnnouncement(id: string, ctx: { actor: AuditActor }) {
+export async function deleteAnnouncement(arenaId: string, id: string, ctx: { actor: AuditActor }) {
   const database = await db()
-  const [row] = await database.delete(schema.announcements).where(eq(schema.announcements.id, id)).returning()
+  const [row] = await database.delete(schema.announcements).where(forArena(arenaId).owns(schema.announcements, eq(schema.announcements.id, id))).returning()
   if (!row) throw notFound("Announcement")
   await recordAudit(ctx.actor, { action: "cms.announcement.delete", entityType: "announcement", entityId: id, arenaId: row.arenaId, description: `Deleted announcement "${row.title}"` })
 }
@@ -264,17 +265,17 @@ export async function createBanner(arenaId: string, input: z.infer<typeof banner
   return row
 }
 
-export async function updateBanner(id: string, input: Partial<z.infer<typeof bannerInputSchema>>, ctx: { actor: AuditActor }) {
+export async function updateBanner(arenaId: string, id: string, input: Partial<z.infer<typeof bannerInputSchema>>, ctx: { actor: AuditActor }) {
   const database = await db()
-  const [row] = await database.update(schema.banners).set({ ...input, subtitle: input.subtitle === "" ? null : input.subtitle, linkUrl: input.linkUrl === "" ? null : input.linkUrl, linkLabel: input.linkLabel === "" ? null : input.linkLabel, updatedAt: new Date() }).where(eq(schema.banners.id, id)).returning()
+  const [row] = await database.update(schema.banners).set({ ...input, subtitle: input.subtitle === "" ? null : input.subtitle, linkUrl: input.linkUrl === "" ? null : input.linkUrl, linkLabel: input.linkLabel === "" ? null : input.linkLabel, updatedAt: new Date() }).where(forArena(arenaId).owns(schema.banners, eq(schema.banners.id, id))).returning()
   if (!row) throw notFound("Banner")
   await recordAudit(ctx.actor, { action: "cms.banner.update", entityType: "banner", entityId: id, arenaId: row.arenaId, description: `Updated banner "${row.title}"` })
   return row
 }
 
-export async function deleteBanner(id: string, ctx: { actor: AuditActor }) {
+export async function deleteBanner(arenaId: string, id: string, ctx: { actor: AuditActor }) {
   const database = await db()
-  const [row] = await database.delete(schema.banners).where(eq(schema.banners.id, id)).returning()
+  const [row] = await database.delete(schema.banners).where(forArena(arenaId).owns(schema.banners, eq(schema.banners.id, id))).returning()
   if (!row) throw notFound("Banner")
   await recordAudit(ctx.actor, { action: "cms.banner.delete", entityType: "banner", entityId: id, arenaId: row.arenaId, description: `Deleted banner "${row.title}"` })
 }

@@ -3,12 +3,20 @@ import { and, eq, isNull } from "drizzle-orm"
 import { db, schema } from "@/server/db"
 import { notFound } from "@/server/http/errors"
 
-/** The platform is multi-arena; today every public page resolves the default arena. */
+/**
+ * The seeded `main` arena.
+ *
+ * @deprecated Not a tenant resolver. Public requests resolve their arena from
+ * the hostname (`server/tenant`), and admin requests from the caller's
+ * membership. This remains only for the development seed and the pre-tenancy
+ * admin fallback, which the authorization work removes. Calling it from a
+ * request path would silently serve one arena's data on another's address.
+ */
 export async function getDefaultArena() {
   const database = await db()
   const arena =
     (await database.query.arenas.findFirst({ where: and(eq(schema.arenas.slug, "main"), isNull(schema.arenas.deletedAt)) })) ??
-    (await database.query.arenas.findFirst({ where: and(eq(schema.arenas.isActive, true), isNull(schema.arenas.deletedAt)) }))
+    (await database.query.arenas.findFirst({ where: and(eq(schema.arenas.status, "ACTIVE"), isNull(schema.arenas.deletedAt)) }))
   if (!arena) throw notFound("Arena")
   return arena
 }

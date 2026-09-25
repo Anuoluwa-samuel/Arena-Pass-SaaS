@@ -1,5 +1,6 @@
 import "server-only"
 import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm"
+import { forArena } from "@/server/db/scoped"
 import { db, schema } from "@/server/db"
 
 function startOfDay(d: Date) {
@@ -108,18 +109,20 @@ export async function getRecentActivity(arenaId: string, limit = 12) {
     .limit(limit)
 }
 
-export async function listAuditLogs(opts: { q?: string; action?: string; actorId?: string; from?: Date; to?: Date; page?: number; pageSize?: number } = {}) {
+export async function listAuditLogs(arenaId: string, opts: { q?: string; action?: string; actorId?: string; from?: Date; to?: Date; page?: number; pageSize?: number } = {}) {
+  const scope = forArena(arenaId)
   const database = await db()
   const page = opts.page ?? 1
   const pageSize = opts.pageSize ?? 30
   const conditions = [
+    eq(schema.auditLogs.arenaId, scope.arenaId),
     opts.action && opts.action !== "all" ? sql`${schema.auditLogs.action} like ${opts.action + "%"}` : undefined,
     opts.actorId ? eq(schema.auditLogs.actorId, opts.actorId) : undefined,
     opts.from ? gte(schema.auditLogs.createdAt, opts.from) : undefined,
     opts.to ? lt(schema.auditLogs.createdAt, opts.to) : undefined,
     opts.q ? sql`(${schema.auditLogs.description} ilike ${"%" + opts.q + "%"} or ${schema.auditLogs.actorName} ilike ${"%" + opts.q + "%"} or ${schema.auditLogs.entityId} ilike ${"%" + opts.q + "%"})` : undefined,
   ].filter(Boolean)
-  const condition = conditions.length ? and(...conditions) : undefined
+  const condition = and(...conditions)
   const [{ count }] = await database.select({ count: sql<number>`count(*)::int` }).from(schema.auditLogs).where(condition)
   const items = await database.select().from(schema.auditLogs).where(condition).orderBy(desc(schema.auditLogs.createdAt)).limit(pageSize).offset((page - 1) * pageSize)
   return { items, meta: { page, pageSize, total: Number(count), totalPages: Math.max(1, Math.ceil(Number(count) / pageSize)) } }

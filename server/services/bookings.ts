@@ -2,6 +2,7 @@ import "server-only"
 import { logger, serializeError } from "@/server/observability/logger"
 import { and, asc, eq, inArray, lt, sql } from "drizzle-orm"
 import { db, schema, rowsOf, type Transaction } from "@/server/db"
+import { forArena } from "@/server/db/scoped"
 import { AppError, isUniqueViolation } from "@/server/http/errors"
 import { checkBookable } from "@/lib/domain/session-status"
 import type { CreateBookingInput } from "@/lib/validation/bookings"
@@ -81,24 +82,31 @@ export interface CreatedBooking {
  * are the final guard even if this code were bypassed.
  */
 export async function createBooking(
+  arenaId: string,
   input: CreateBookingInput,
   ctx: { actor: AuditActor; createdByUserId?: string | null }
 ): Promise<CreatedBooking> {
+  const scope = forArena(arenaId)
   const database = await db()
 
-  // Idempotent replay: same key → same booking, no new hold.
-  const existing = await database.query.bookings.findFirst({ where: eq(schema.bookings.idempotencyKey, input.idempotencyKey) })
+  // Idempotent replay: same key → same booking, no new hold. Scoped to the
+  // arena, so one arena replaying another's key cannot read their booking.
+  const existing = await database.query.bookings.findFirst({
+    where: scope.owns(schema.bookings, eq(schema.bookings.idempotencyKey, input.idempotencyKey)),
+  })
   if (existing) return hydrate(existing, true)
 
-  const customer = await upsertCustomerByEmail(input.customer)
+  const customer = await upsertCustomerByEmail(scope.arenaId, input.customer)
   const now = new Date()
 
   try {
     const created = await database.transaction(async (tx) => {
+      // The session is looked up inside this arena. A session id from another
+      // arena is simply not found — it is never bookable from here.
       const [session] = await tx
         .select()
         .from(schema.sessions)
-        .where(eq(schema.sessions.id, input.sessionId))
+        .where(and(eq(schema.sessions.id, input.sessionId), eq(schema.sessions.arenaId, scope.arenaId)))
         .for("update")
       if (!session || session.deletedAt) throw new AppError("SESSION_NOT_FOUND", "Session not found")
 
@@ -157,8 +165,14 @@ export async function createBooking(
     return { ...created, customer, reused: false }
   } catch (err) {
     if (isUniqueViolation(err, "bookings_idempotency_idx")) {
-      const replay = await database.query.bookings.findFirst({ where: eq(schema.bookings.idempotencyKey, input.idempotencyKey) })
+      const replay = await database.query.bookings.findFirst({
+        where: scope.owns(schema.bookings, eq(schema.bookings.idempotencyKey, input.idempotencyKey)),
+      })
       if (replay) return hydrate(replay, true)
+      // The key is taken by another arena. Until the unique index is composite
+      // this is possible, and returning their booking would be a cross-tenant
+      // leak — so it is a conflict, not a replay.
+      throw new AppError("DUPLICATE_BOOKING", "This booking reference is already in use")
     }
     if (err instanceof AppError) throw err
     // Constraint violations from a race collapse into the business error.
@@ -167,16 +181,17 @@ export async function createBooking(
   }
 
   async function hydrate(booking: schema.Booking, reused: boolean): Promise<CreatedBooking> {
-    const session = (await database.query.sessions.findFirst({ where: eq(schema.sessions.id, booking.sessionId) }))!
+    const session = (await database.query.sessions.findFirst({ where: scope.owns(schema.sessions, eq(schema.sessions.id, booking.sessionId)) }))!
     const customerRow = (await database.query.customers.findFirst({ where: eq(schema.customers.id, booking.customerId) }))!
     const slot = booking.slotId ? await database.query.sessionSlots.findFirst({ where: eq(schema.sessionSlots.id, booking.slotId) }) : null
     return { booking, session, customer: customerRow, reused, slot: { teamNumber: slot?.teamNumber ?? 0, slotNumber: slot?.slotNumber ?? 0 } }
   }
 }
 
-export async function getBookingById(id: string) {
+export async function getBookingById(arenaId: string, id: string) {
+  const scope = forArena(arenaId)
   const database = await db()
-  const booking = await database.query.bookings.findFirst({ where: eq(schema.bookings.id, id) })
+  const booking = await database.query.bookings.findFirst({ where: scope.owns(schema.bookings, eq(schema.bookings.id, id)) })
   if (!booking) throw new AppError("BOOKING_NOT_FOUND", "Booking not found")
   const [session, customer, slot, payment, ticket] = await Promise.all([
     database.query.sessions.findFirst({ where: eq(schema.sessions.id, booking.sessionId) }),
@@ -189,10 +204,15 @@ export async function getBookingById(id: string) {
 }
 
 /** Customer-initiated cancel of an unpaid reservation. */
-export async function cancelPendingBooking(id: string, ctx: { actor: AuditActor }) {
+export async function cancelPendingBooking(arenaId: string, id: string, ctx: { actor: AuditActor }) {
+  const scope = forArena(arenaId)
   const database = await db()
   const result = await database.transaction(async (tx) => {
-    const [booking] = await tx.select().from(schema.bookings).where(eq(schema.bookings.id, id)).for("update")
+    const [booking] = await tx
+      .select()
+      .from(schema.bookings)
+      .where(and(eq(schema.bookings.id, id), eq(schema.bookings.arenaId, scope.arenaId)))
+      .for("update")
     if (!booking) throw new AppError("BOOKING_NOT_FOUND", "Booking not found")
     if (booking.status !== "PENDING") throw new AppError("CONFLICT", "Only pending reservations can be released")
     const now = new Date()
@@ -209,7 +229,6 @@ export async function cancelPendingBooking(id: string, ctx: { actor: AuditActor 
   return result
 }
 
-/** Cron: release every expired hold across all sessions. */
 /**
  * Releases one session's expired holds right away (no-op when there are none).
  * Called on single-session reads so availability, the displayed status and the
@@ -246,6 +265,14 @@ export function sweepExpiredHolds(minIntervalMs = 30_000): Promise<void> {
   return state.running
 }
 
+/**
+ * Platform-level housekeeping: releases expired holds in every arena.
+ *
+ * Deliberately not arena-scoped — it is the cron's job to sweep the whole
+ * database — but it only ever moves a hold that has already expired back to
+ * FREE, which is the same work each arena would do for itself. It reads no
+ * tenant data and returns none.
+ */
 export async function expireStaleBookings() {
   const database = await db()
   const now = new Date()
@@ -263,7 +290,8 @@ export async function expireStaleBookings() {
   return { released }
 }
 
-export async function listBookingsForSession(sessionId: string) {
+export async function listBookingsForSession(arenaId: string, sessionId: string) {
+  const scope = forArena(arenaId)
   const database = await db()
   return database
     .select({
@@ -274,6 +302,6 @@ export async function listBookingsForSession(sessionId: string) {
     .from(schema.bookings)
     .innerJoin(schema.customers, eq(schema.customers.id, schema.bookings.customerId))
     .leftJoin(schema.sessionSlots, eq(schema.sessionSlots.id, schema.bookings.slotId))
-    .where(eq(schema.bookings.sessionId, sessionId))
+    .where(scope.owns(schema.bookings, eq(schema.bookings.sessionId, sessionId)))
     .orderBy(asc(schema.bookings.createdAt))
 }

@@ -1,10 +1,12 @@
 import "server-only"
 import { and, desc, eq, gte, isNotNull, isNull, lt, lte, or, sql, type SQL } from "drizzle-orm"
 import { db, schema, rowsOf, type Transaction } from "@/server/db"
+import { forArena } from "@/server/db/scoped"
 import { env } from "@/server/env"
 import { AppError, isUniqueViolation } from "@/server/http/errors"
-import { randomToken } from "@/server/auth/tokens"
-import { getPaymentProvider } from "@/server/payments"
+import { randomToken, sha256 } from "@/server/auth/tokens"
+import { getPaymentProviderForArena, resolvePaymentAccount } from "@/server/payments/accounts"
+import { assertTransition } from "@/server/payments/state"
 import type { VerifyResult } from "@/server/payments/provider"
 import { logger, serializeError } from "@/server/observability/logger"
 import { recordAudit, SYSTEM_ACTOR, type AuditActor } from "./audit"
@@ -16,9 +18,10 @@ import { getSettings } from "./settings"
 // ---------------------------------------------------------------------------
 // Initialize
 // ---------------------------------------------------------------------------
-export async function initializePayment(bookingId: string, opts: { callbackPath?: string } = {}) {
+export async function initializePayment(arenaId: string, bookingId: string, opts: { callbackPath?: string } = {}) {
+  const scope = forArena(arenaId)
   const database = await db()
-  const booking = await database.query.bookings.findFirst({ where: eq(schema.bookings.id, bookingId) })
+  const booking = await database.query.bookings.findFirst({ where: scope.owns(schema.bookings, eq(schema.bookings.id, bookingId)) })
   if (!booking) throw new AppError("BOOKING_NOT_FOUND", "Booking not found")
   if (booking.status === "CONFIRMED") throw new AppError("BOOKING_ALREADY_CONFIRMED", "This booking is already paid")
   if (booking.status !== "PENDING") throw new AppError("BOOKING_EXPIRED", "This reservation has expired. Please book again.")
@@ -29,12 +32,13 @@ export async function initializePayment(bookingId: string, opts: { callbackPath?
 
   // Reuse an in-flight payment so a refresh doesn't create a second charge attempt.
   const pending = await database.query.payments.findFirst({
-    where: and(eq(schema.payments.bookingId, bookingId), eq(schema.payments.status, "PENDING")),
+    where: scope.owns(schema.payments, eq(schema.payments.bookingId, bookingId), eq(schema.payments.status, "PENDING")),
     orderBy: [desc(schema.payments.createdAt)],
   })
   if (pending?.authorizationUrl) return { payment: pending, authorizationUrl: pending.authorizationUrl }
 
-  const provider = getPaymentProvider()
+  // The arena is paid into its own provider account.
+  const provider = await getPaymentProviderForArena(scope.arenaId)
   const reference = `AP-${randomToken(9).replace(/[^a-zA-Z0-9]/g, "").slice(0, 12).toUpperCase()}`
   const callbackUrl = new URL(opts.callbackPath ?? "/checkout/callback", env.APP_URL)
   callbackUrl.searchParams.set("reference", reference)
@@ -81,9 +85,18 @@ export type VerifyOutcome =
  * and currency, then confirms in one transaction. Safe to call repeatedly
  * from the callback page, the webhook and a reconciliation job.
  */
-export async function verifyPayment(reference: string): Promise<VerifyOutcome> {
+/**
+ * Verifies a payment against the provider and, on success, confirms the
+ * booking and issues the ticket.
+ *
+ * `arenaId` is the arena whose storefront the customer came back to. A
+ * reference belonging to another arena reads as not found, so a reference
+ * leaked from one arena cannot be redeemed on another's checkout.
+ */
+export async function verifyPayment(arenaId: string, reference: string): Promise<VerifyOutcome> {
+  const scope = forArena(arenaId)
   const database = await db()
-  const payment = await database.query.payments.findFirst({ where: eq(schema.payments.reference, reference) })
+  const payment = await database.query.payments.findFirst({ where: scope.owns(schema.payments, eq(schema.payments.reference, reference)) })
   if (!payment) throw new AppError("PAYMENT_NOT_FOUND", "Payment not found")
 
   if (payment.status === "PAID") {
@@ -95,12 +108,15 @@ export async function verifyPayment(reference: string): Promise<VerifyOutcome> {
   if (payment.status === "REFUNDED" && payment.refundRequiredAt) return { status: "REFUND_REQUIRED", payment }
   if (payment.status === "FAILED" || payment.status === "REFUNDED") return { status: "FAILED", payment }
 
-  const provider = getPaymentProvider()
+  const provider = await getPaymentProviderForArena(payment.arenaId)
   const result = await provider.verify(reference)
 
   if (result.status === "pending") return { status: "PENDING", payment }
 
   if (result.status === "failed") {
+    // A payment that has already been paid or refunded cannot be un-paid by a
+    // late event; the transition check turns that into a visible conflict.
+    assertTransition(payment.status, "FAILED", `verify ${reference}`)
     const [failed] = await database
       .update(schema.payments)
       .set({ status: "FAILED", failureReason: result.failureReason ?? "Payment failed", providerPayload: (result.raw as object) ?? payment.providerPayload, providerTransactionId: result.providerTransactionId ?? payment.providerTransactionId, verifiedAt: new Date(), updatedAt: new Date() })
@@ -112,6 +128,7 @@ export async function verifyPayment(reference: string): Promise<VerifyOutcome> {
   // Success: amounts must match exactly; a tampered/partial charge is not a confirmation.
   if (result.amount !== payment.amount || result.currency.toUpperCase() !== payment.currency.toUpperCase()) {
     logger.error("payment.amount_mismatch", { reference, expected: payment.amount, got: result.amount, currency: result.currency })
+    assertTransition(payment.status, "FAILED", `amount mismatch on ${reference}`)
     const [flagged] = await database
       .update(schema.payments)
       .set({ status: "FAILED", failureReason: `Amount mismatch: expected ${payment.amount} ${payment.currency}, provider reported ${result.amount} ${result.currency}`, providerPayload: (result.raw as object) ?? null, verifiedAt: new Date(), updatedAt: new Date() })
@@ -312,16 +329,21 @@ async function alertAdminsRefundRequired(payment: schema.Payment) {
   const email = refundRequiredAdminEmail(details)
   await notify({ arenaId: payment.arenaId, recipientType: "system", channel: "IN_APP", type: "payment.refund_required", title: email.subject, body: email.text, data: { paymentId: payment.id } })
 
+  // Who can act on this: an ACTIVE member of *this* arena whose role there can
+  // issue refunds. Membership decides, so a refunder at another arena is never
+  // told about this payment.
   const admins = await database
     .selectDistinct({ id: schema.users.id, email: schema.users.email })
-    .from(schema.users)
-    .innerJoin(schema.rolePermissions, eq(schema.rolePermissions.roleId, schema.users.roleId))
+    .from(schema.arenaMemberships)
+    .innerJoin(schema.users, eq(schema.users.id, schema.arenaMemberships.userId))
+    .innerJoin(schema.rolePermissions, eq(schema.rolePermissions.roleId, schema.arenaMemberships.roleId))
     .where(
       and(
+        eq(schema.arenaMemberships.arenaId, payment.arenaId),
+        eq(schema.arenaMemberships.status, "ACTIVE"),
         eq(schema.rolePermissions.permission, "tickets.refund"),
         eq(schema.users.isActive, true),
-        isNull(schema.users.deletedAt),
-        or(eq(schema.users.arenaId, payment.arenaId), isNull(schema.users.arenaId))
+        isNull(schema.users.deletedAt)
       )
     )
   for (const admin of admins) {
@@ -330,11 +352,13 @@ async function alertAdminsRefundRequired(payment: schema.Payment) {
 }
 
 /** Charged-but-no-ticket payments still waiting for an admin refund. */
-export async function countPaymentsNeedingRefund(arenaId?: string | null) {
+export async function countPaymentsNeedingRefund(arenaId: string) {
+  const scope = forArena(arenaId)
   const database = await db()
-  const where = [eq(schema.payments.status, "PAID"), isNotNull(schema.payments.refundRequiredAt)]
-  if (arenaId) where.push(eq(schema.payments.arenaId, arenaId))
-  const [{ count }] = await database.select({ count: sql<number>`count(*)::int` }).from(schema.payments).where(and(...where))
+  const [{ count }] = await database
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.payments)
+    .where(scope.owns(schema.payments, eq(schema.payments.status, "PAID"), isNotNull(schema.payments.refundRequiredAt)))
   return Number(count)
 }
 
@@ -374,15 +398,114 @@ async function afterTicketIssued(ticket: schema.Ticket) {
 // ---------------------------------------------------------------------------
 // Webhook
 // ---------------------------------------------------------------------------
+/**
+ * Verification entry point for callers that have no tenant context: the
+ * provider webhook and the reconciliation cron. Neither knows about arenas,
+ * so the arena is taken from the payment record the reference resolves to —
+ * the one legitimate cross-tenant read in this service, and the reason it is
+ * named differently from the customer-facing `verifyPayment`.
+ */
+export async function verifyPaymentByReference(reference: string): Promise<VerifyOutcome> {
+  const database = await db()
+  const payment = await database.query.payments.findFirst({ where: eq(schema.payments.reference, reference) })
+  if (!payment) throw new AppError("PAYMENT_NOT_FOUND", "Payment not found")
+  return verifyPayment(payment.arenaId, reference)
+}
+
+/**
+ * Provider → server.
+ *
+ * A payment provider knows nothing about arenas, so this is the one entry
+ * point that starts without a tenant. The order matters:
+ *
+ *  1. record the delivery against a fingerprint of its own bytes, which makes
+ *     a replay — the provider's retry, or an attacker resending a captured
+ *     request — collide with the row already stored;
+ *  2. find which arena the reference belongs to, using an unguessable
+ *     reference as a *lookup*, trusting nothing in the body;
+ *  3. verify the signature with **that arena's** signing secret;
+ *  4. only then act, and re-read the amount from our own record.
+ *
+ * Nothing in the payload is believed: not the amount, not the status, not the
+ * customer. The reference selects a record; the provider's own API confirms
+ * what happened to it.
+ */
 export async function handleProviderWebhook(rawBody: string, headers: Headers) {
-  const provider = getPaymentProvider()
-  const event = await provider.parseWebhook(rawBody, headers)
-  if (!event) throw new AppError("FORBIDDEN", "Invalid webhook signature")
-  logger.info("payment.webhook", { type: event.type, reference: event.reference })
-  // Acknowledge events we don't act on (refund.processed, transfer.*…): a non-2xx makes the provider retry forever.
-  if (!event.reference) return null
+  const database = await db()
+  const signature =
+    headers.get("x-paystack-signature") ?? headers.get("x-webhook-signature") ?? headers.get("x-signature") ?? ""
+  const fingerprint = sha256(`${env.PAYMENT_PROVIDER}:${signature}:${rawBody}`)
+
+  // Claim the delivery first. A unique violation means we have seen these
+  // exact bytes before, so it is acknowledged without being acted on again.
+  let event: schema.PaymentEvent
   try {
-    return await verifyPayment(event.reference)
+    ;[event] = await database
+      .insert(schema.paymentEvents)
+      .values({ provider: env.PAYMENT_PROVIDER, eventType: "unparsed", fingerprint, signatureValid: false })
+      .returning()
+  } catch (err) {
+    if (isUniqueViolation(err, "payment_events_fingerprint_idx")) {
+      logger.info("payment.webhook_replay", { provider: env.PAYMENT_PROVIDER })
+      return null
+    }
+    throw err
+  }
+
+  const finish = async (patch: Partial<schema.PaymentEvent>) => {
+    await database
+      .update(schema.paymentEvents)
+      .set({ processedAt: new Date(), ...patch })
+      .where(eq(schema.paymentEvents.id, event.id))
+  }
+
+  // The reference is readable before the signature is checked, but it is only
+  // ever used to decide *which key to verify with*.
+  let claimedReference: string | undefined
+  try {
+    const parsed = JSON.parse(rawBody) as { data?: { reference?: unknown } }
+    if (typeof parsed?.data?.reference === "string") claimedReference = parsed.data.reference
+  } catch {
+    await finish({ outcome: "unparseable" })
+    throw new AppError("VALIDATION_ERROR", "Webhook body is not valid JSON")
+  }
+
+  const payment = claimedReference
+    ? await database.query.payments.findFirst({ where: eq(schema.payments.reference, claimedReference) })
+    : undefined
+  if (!payment) {
+    // Verified against the platform account so an unknown reference cannot be
+    // used to probe which arenas exist.
+    await finish({ outcome: "unknown_reference", reference: claimedReference ?? null })
+    logger.info("payment.webhook_unknown_reference", {})
+    return null
+  }
+
+  const provider = await getPaymentProviderForArena(payment.arenaId)
+  const verifiedEvent = await provider.parseWebhook(rawBody, headers)
+  if (!verifiedEvent) {
+    await finish({ outcome: "bad_signature", arenaId: payment.arenaId, paymentId: payment.id, reference: payment.reference })
+    logger.warn("payment.webhook_bad_signature", { arenaId: payment.arenaId, reference: payment.reference })
+    throw new AppError("FORBIDDEN", "Invalid webhook signature")
+  }
+
+  await finish({
+    arenaId: payment.arenaId,
+    paymentId: payment.id,
+    reference: payment.reference,
+    eventType: verifiedEvent.type,
+    signatureValid: true,
+    outcome: "accepted",
+    // Stored for support, after the signature proved the provider sent it.
+    payload: (verifiedEvent.raw as object) ?? null,
+  })
+  logger.info("payment.webhook", { type: verifiedEvent.type, arenaId: payment.arenaId })
+
+  // Events we do not act on (refund.processed, transfer.*…) are acknowledged:
+  // a non-2xx makes the provider retry forever.
+  if (!verifiedEvent.reference) return null
+  try {
+    return await verifyPayment(payment.arenaId, verifiedEvent.reference)
   } catch (err) {
     if (err instanceof AppError && err.code === "PAYMENT_NOT_FOUND") return null
     throw err
@@ -400,6 +523,7 @@ const RECONCILE_BATCH = 50
  * Skips attempts younger than 2 minutes (the customer is probably still on the
  * payment page). Runs from the housekeeping cron; each payment is independent.
  */
+/** Platform-level cron: sweeps stale pending payments in every arena. */
 export async function reconcilePendingPayments(now = new Date()) {
   const database = await db()
   const stale = await database
@@ -418,7 +542,7 @@ export async function reconcilePendingPayments(now = new Date()) {
   const summary = { checked: stale.length, paid: 0, failed: 0, pending: 0, refundRequired: 0, errors: 0 }
   for (const { reference } of stale) {
     try {
-      const outcome = await verifyPayment(reference)
+      const outcome = await verifyPaymentByReference(reference)
       if (outcome.status === "PAID") summary.paid++
       else if (outcome.status === "FAILED") summary.failed++
       else if (outcome.status === "REFUND_REQUIRED") summary.refundRequired++
@@ -435,16 +559,18 @@ export async function reconcilePendingPayments(now = new Date()) {
 // ---------------------------------------------------------------------------
 // Refund
 // ---------------------------------------------------------------------------
-export async function refundPayment(paymentId: string, reason: string, ctx: { actor: AuditActor & { id: string } }) {
+export async function refundPayment(arenaId: string, paymentId: string, reason: string, ctx: { actor: AuditActor & { id: string } }) {
+  const scope = forArena(arenaId)
   const database = await db()
-  const payment = await database.query.payments.findFirst({ where: eq(schema.payments.id, paymentId) })
+  const payment = await database.query.payments.findFirst({ where: scope.owns(schema.payments, eq(schema.payments.id, paymentId)) })
   if (!payment) throw new AppError("PAYMENT_NOT_FOUND", "Payment not found")
   if (payment.status !== "PAID") throw new AppError("CONFLICT", "Only paid payments can be refunded")
+  assertTransition(payment.status, "REFUNDED", `refund ${payment.reference}`)
   const ticket = await database.query.tickets.findFirst({ where: eq(schema.tickets.bookingId, payment.bookingId) })
   if (!ticket && !payment.refundRequiredAt) throw new AppError("TICKET_NOT_FOUND", "No ticket found for this payment")
   if (ticket?.status === "REFUNDED") throw new AppError("CONFLICT", "Ticket is already refunded")
 
-  const provider = getPaymentProvider()
+  const provider = await getPaymentProviderForArena(payment.arenaId)
   const providerResult = await provider.refund({ providerTransactionId: payment.providerTransactionId ?? payment.reference, amount: payment.amount, reason })
   if (providerResult.status === "failed") throw new AppError("PAYMENT_PROVIDER_ERROR", "The provider rejected the refund")
 
@@ -487,17 +613,18 @@ export async function refundPayment(paymentId: string, reason: string, ctx: { ac
 // ---------------------------------------------------------------------------
 // Admin reads
 // ---------------------------------------------------------------------------
-export async function listPayments(opts: { status?: string; from?: Date; to?: Date; q?: string; page?: number; pageSize?: number } = {}) {
+export async function listPayments(arenaId: string, opts: { status?: string; from?: Date; to?: Date; q?: string; page?: number; pageSize?: number } = {}) {
+  const scope = forArena(arenaId)
   const database = await db()
   const page = opts.page ?? 1
   const pageSize = opts.pageSize ?? 20
-  const where: SQL[] = []
+  const where: SQL[] = [eq(schema.payments.arenaId, scope.arenaId)]
   if (opts.status === "NEEDS_REFUND") where.push(eq(schema.payments.status, "PAID"), isNotNull(schema.payments.refundRequiredAt))
   else if (opts.status && opts.status !== "all") where.push(eq(schema.payments.status, opts.status as schema.Payment["status"]))
   if (opts.from) where.push(gte(schema.payments.createdAt, opts.from))
   if (opts.to) where.push(lte(schema.payments.createdAt, opts.to))
   if (opts.q) where.push(sql`(${schema.payments.reference} ilike ${"%" + opts.q + "%"} or ${schema.customers.name} ilike ${"%" + opts.q + "%"} or ${schema.customers.email} ilike ${"%" + opts.q + "%"})`)
-  const condition = where.length ? and(...where) : undefined
+  const condition = and(...where)
   const [{ count }] = await database.select({ count: sql<number>`count(*)::int` }).from(schema.payments).innerJoin(schema.customers, eq(schema.customers.id, schema.payments.customerId)).where(condition)
   const items = await database
     .select({
@@ -518,16 +645,21 @@ export async function listPayments(opts: { status?: string; from?: Date; to?: Da
   return { items, meta: { page, pageSize, total: Number(count), totalPages: Math.max(1, Math.ceil(Number(count) / pageSize)) } }
 }
 
-export async function listTransactions(opts: { page?: number; pageSize?: number } = {}) {
+export async function listTransactions(arenaId: string, opts: { page?: number; pageSize?: number } = {}) {
+  const scope = forArena(arenaId)
   const database = await db()
   const page = opts.page ?? 1
   const pageSize = opts.pageSize ?? 50
-  const [{ count }] = await database.select({ count: sql<number>`count(*)::int` }).from(schema.transactions)
+  const [{ count }] = await database
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.transactions)
+    .where(scope.owns(schema.transactions))
   const items = await database
     .select({ transaction: schema.transactions, payment: { reference: schema.payments.reference }, ticket: { ticketNumber: schema.tickets.ticketNumber } })
     .from(schema.transactions)
     .innerJoin(schema.payments, eq(schema.payments.id, schema.transactions.paymentId))
     .leftJoin(schema.tickets, eq(schema.tickets.id, schema.transactions.ticketId))
+    .where(scope.owns(schema.transactions))
     .orderBy(desc(schema.transactions.createdAt))
     .limit(pageSize)
     .offset((page - 1) * pageSize)

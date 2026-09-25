@@ -1,5 +1,6 @@
 import "server-only"
 import { and, desc, eq, sql, type SQL } from "drizzle-orm"
+import { forArena } from "@/server/db/scoped"
 import { db, schema } from "@/server/db"
 import { getEmailChannel } from "@/server/notifications/email"
 import { logger, serializeError } from "@/server/observability/logger"
@@ -67,20 +68,25 @@ export async function dispatch(notificationId: string, html?: string) {
   }
 }
 
-export async function listNotifications(opts: { status?: string; channel?: string; page?: number; pageSize?: number } = {}) {
+export async function listNotifications(arenaId: string, opts: { status?: string; channel?: string; page?: number; pageSize?: number } = {}) {
+  const scope = forArena(arenaId)
   const database = await db()
   const page = opts.page ?? 1
   const pageSize = opts.pageSize ?? 20
-  const where: SQL[] = []
+  const where: SQL[] = [eq(schema.notifications.arenaId, scope.arenaId)]
   if (opts.status && opts.status !== "all") where.push(eq(schema.notifications.status, opts.status as schema.Notification["status"]))
   if (opts.channel && opts.channel !== "all") where.push(eq(schema.notifications.channel, opts.channel as schema.Notification["channel"]))
-  const condition = where.length ? and(...where) : undefined
+  const condition = and(...where)
   const [{ count }] = await database.select({ count: sql<number>`count(*)::int` }).from(schema.notifications).where(condition)
   const items = await database.select().from(schema.notifications).where(condition).orderBy(desc(schema.notifications.createdAt)).limit(pageSize).offset((page - 1) * pageSize)
   return { items, meta: { page, pageSize, total: Number(count), totalPages: Math.max(1, Math.ceil(Number(count) / pageSize)) } }
 }
 
-export async function markRead(id: string) {
+export async function markRead(arenaId: string, id: string) {
+  const scope = forArena(arenaId)
   const database = await db()
-  await database.update(schema.notifications).set({ status: "READ", readAt: new Date() }).where(eq(schema.notifications.id, id))
+  await database
+    .update(schema.notifications)
+    .set({ status: "READ", readAt: new Date() })
+    .where(scope.owns(schema.notifications, eq(schema.notifications.id, id)))
 }
