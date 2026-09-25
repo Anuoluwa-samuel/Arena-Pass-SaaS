@@ -1,7 +1,7 @@
-# Arena Pass — Multi-Tenant SaaS Transformation Plan
+# Game Slots — Multi-Tenant SaaS Transformation Plan
 
 Date: 2026-09-24
-This repository began as a copy of the single-arena Arena Pass application at commit `a431683`, and was transformed into the multi-tenant platform described below. It stands on its own; the original project is unaffected.
+This repository began as a copy of the single-arena Game Slots application at commit `a431683`, and was transformed into the multi-tenant platform described below. It stands on its own; the original project is unaffected.
 
 This document is the output of **Phase 1 (audit + target design)**. It records what the
 existing system actually does, where the tenant boundary leaks today, and the ordered
@@ -102,11 +102,11 @@ for the platform scope. Session titles, CMS slugs etc. must be unique *within* a
 No `organizations`, `plans`, `subscriptions`, `usage_records`, `arena_payment_accounts`,
 `arena_domains`. Payment provider credentials are global environment variables, so every
 arena's money would land in one Paystack account. There is no platform control centre and
-no separation between "customer pays for football" and "arena pays for Arena Pass".
+no separation between "customer pays for football" and "arena pays for Game Slots".
 
 ### 2.9 No host-based tenant resolution
 No middleware, no subdomain or custom-domain handling. Public routes are `/sessions`,
-not `/{arena}/sessions` or `lekki.arenapass.com/sessions`.
+not `/{arena}/sessions` or `lekki.gameslots.com/sessions`.
 
 ### 2.10 Cache and background jobs are tenant-blind
 `sweepExpiredHolds()` uses a process-global throttle; `syncSessionLifecycle()` and the
@@ -331,7 +331,7 @@ tenant and never proves access to one. Specific rules:
 - `normalizeHostname` lowercases, strips port and trailing dot, and returns
   null for anything that is not a bare hostname (`evil.com/../admin`,
   `user@evil.com`, `a..b`), so a forged header can never reach a query.
-- Only one label is read beneath the root, so `a.b.arenapass.com` is never
+- Only one label is read beneath the root, so `a.b.gameslots.com` is never
   interpreted as arena `a`.
 - 18 reserved subdomains (`www`, `api`, `admin`, `app`, `cdn`, …) can never be
   an arena slug.
@@ -376,7 +376,7 @@ Two side-effects worth naming:
   served to every host. `Vary: Host` was added to the two cacheable public
   endpoints.
 - The storefront's document title came from the root layout's hard-coded
-  `%s · Arena Pass`. A `generateMetadata` in the public layout now uses the
+  `%s · Game Slots`. A `generateMetadata` in the public layout now uses the
   arena's own name, so Lekki's storefront reads `Sessions · Lekki Football
   Arena` while the platform admin keeps platform branding.
 
@@ -391,9 +391,9 @@ each arena:
 
 | Request | Result |
 | --- | --- |
-| `Host: main.localhost` `/api/sessions` | only Arena Pass's session |
+| `Host: main.localhost` `/api/sessions` | only Game Slots's session |
 | `Host: lekki.localhost` `/api/sessions` | only Lekki's session |
-| `Host: main.localhost` `/api/cms/public` | `arena=Arena Pass` |
+| `Host: main.localhost` `/api/cms/public` | `arena=Game Slots` |
 | `Host: lekki.localhost` `/api/cms/public` | `arena=Lekki Football Arena` |
 | `Host: evil.com` | 404 `ARENA_NOT_FOUND` |
 | `Host: nosucharena.localhost` | 404 `ARENA_NOT_FOUND` |
@@ -463,12 +463,12 @@ member is an identity plus a membership, so:
 - removing someone ends their membership, not their account: they may still
   work for another arena, and deleting the user row would take that with it;
 - suspending someone suspends them *here* and nowhere else;
-- adding a person who already has an Arena Pass account reuses that identity
+- adding a person who already has an Game Slots account reuses that identity
   and grants a second membership;
 - an arena cannot lose its last owner, and only an owner may grant the owner
   role;
 - platform roles are not assignable from an arena, so an arena owner cannot
-  mint an Arena Pass operator.
+  mint an Game Slots operator.
 
 `users.view` / `users.manage` were the single-arena names for this and are
 retired in favour of `staff.*`; migration 0006 removes the dead grants.
@@ -940,12 +940,12 @@ digital ticket and the auth shell. They now use the arena's logo, or its
 initials. Lekki's storefront reads `LF`.
 
 **Two branding leaks in email and metadata.** The password-reset email was
-sent as "Arena Pass" to customers of every arena; it now carries the arena's
+sent as "Game Slots" to customers of every arena; it now carries the arena's
 own name, as the payment and ticket emails already did. And the storefront's
-document title was being wrapped by the root layout's `%s · Arena Pass`
+document title was being wrapped by the root layout's `%s · Game Slots`
 template — `title.absolute` (checked against this Next version's own metadata
 documentation) stops that, so the homepage now reads `Lekki Football Arena`
-rather than `Lekki Football Arena · Arena Pass`.
+rather than `Lekki Football Arena · Game Slots`.
 
 **Verification.**
 
@@ -963,7 +963,7 @@ rather than `Lekki Football Arena · Arena Pass`.
 - Over HTTP: a hostile SVG refused with *"This SVG contains an event handler
   attribute"*; a clean one accepted and served with the locked-down headers;
   the two storefronts rendering `AP` and `LF` respectively, with titles
-  `Arena Pass` and `Lekki Football Arena`.
+  `Game Slots` and `Lekki Football Arena`.
 
 ### Phase 11 record
 
@@ -1044,7 +1044,7 @@ Two decisions inside it are worth naming:
 - The arena is created `PENDING_SETUP`, so its storefront is **not** served
   until its owner launches it. A half-configured arena that cannot take
   payment should not be taking bookings.
-- An email that already belongs to an Arena Pass account opens a second arena
+- An email that already belongs to an Game Slots account opens a second arena
   under that same identity, and **the password in the form is ignored**.
   Otherwise knowing somebody's address would be a way to overwrite their
   credentials.
@@ -1095,7 +1095,7 @@ Signing up is precisely the moment there is no tenant. It now lives in a
 
 **Billing is a separate financial domain**, and the schema says so. `plans`,
 `subscriptions`, `subscription_events` and `usage_records` describe what an
-*organization* pays Arena Pass; `payments` and `transactions` describe what an
+*organization* pays Game Slots; `payments` and `transactions` describe what an
 arena's *customers* pay the arena. Different tables, different status
 vocabulary (`TRIALING / ACTIVE / PAST_DUE / CANCELLED / EXPIRED`), no shared
 code path — so a bug in football ticketing cannot touch a subscription, and a

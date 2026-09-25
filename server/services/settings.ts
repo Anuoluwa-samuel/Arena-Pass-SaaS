@@ -10,7 +10,7 @@ import { BOOKING_HOLD_MINUTES, DEFAULT_CURRENCY, SESSION_DEFAULTS } from "@/lib/
  * nothing here requires a deploy to change.
  */
 export const settingsSchema = z.object({
-  siteName: z.string().min(1).max(80).default("Arena Pass"),
+  siteName: z.string().min(1).max(80).default("Game Slots"),
   currency: z.string().length(3).default(DEFAULT_CURRENCY),
   timezone: z.string().default("Africa/Lagos"),
   defaultTeamsCount: z.number().int().min(1).max(8).default(SESSION_DEFAULTS.teamsCount),

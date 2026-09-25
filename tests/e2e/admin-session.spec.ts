@@ -4,7 +4,7 @@ import { generateSession } from "./session-data"
 /** Admin journey: sign in → create session with custom capacity → publish → see it on the public site. */
 test("admin creates, configures and publishes a session", async ({ page }) => {
   await page.goto("/admin/login")
-  await page.fill("#email", "admin@arenapass.local")
+  await page.fill("#email", "admin@gameslots.local")
   await page.fill("#password", "ChangeMe123!")
   await page.getByRole("button", { name: "Sign in" }).click()
   await expect(page).toHaveURL(/\/admin$/, { timeout: 60_000 }) // sign-in + first admin compile is slow in dev under parallel workers
@@ -41,7 +41,7 @@ test("admin creates, configures and publishes a session", async ({ page }) => {
 
 test("staff role cannot open finance pages", async ({ page }) => {
   await page.goto("/admin/login")
-  await page.fill("#email", "sam.staff@arenapass.local")
+  await page.fill("#email", "sam.staff@gameslots.local")
   await page.fill("#password", "ChangeMe123!")
   await page.getByRole("button", { name: "Sign in" }).click()
   await expect(page).toHaveURL(/\/admin$/, { timeout: 60_000 }) // sign-in + first admin compile is slow in dev under parallel workers

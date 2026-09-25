@@ -9,7 +9,7 @@ import { z } from "zod"
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_URL: z.string().url().default("http://localhost:4000"),
-  APP_NAME: z.string().default("Arena Pass"),
+  APP_NAME: z.string().default("Game Slots"),
   /**
    * The domain arena subdomains hang off: `{slug}.APP_ROOT_DOMAIN`. Defaults
    * to the host of APP_URL, which keeps a single-arena deployment working
@@ -53,7 +53,7 @@ const schema = z.object({
   // Email
   EMAIL_PROVIDER: z.enum(["console", "resend"]).default("console"),
   RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default("Arena Pass <no-reply@localhost>"),
+  EMAIL_FROM: z.string().default("Game Slots <no-reply@localhost>"),
 
   // First admin account, created only when the database has no users.
   BOOTSTRAP_ADMIN_EMAIL: z.string().email().optional(),

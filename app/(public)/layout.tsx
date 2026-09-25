@@ -21,10 +21,10 @@ import { getSettings } from "@/server/services/settings"
 export async function generateMetadata() {
   const tenant = await getTenantContext()
   // The platform's own front door, rather than any arena's storefront.
-  if (!tenant) return { title: { absolute: "Arena Pass — run your own arena" } }
+  if (!tenant) return { title: { absolute: "Game Slots — run your own arena" } }
   const settings = await getSettings(tenant.arenaId)
   const name = settings.siteName || tenant.arena.name
-  // `absolute` so the root layout's "%s · Arena Pass" template does not wrap
+  // `absolute` so the root layout's "%s · Game Slots" template does not wrap
   // the arena's own name; `template` still applies to pages beneath this one.
   return { title: { absolute: name, template: `%s \u00b7 ${name}` } }
 }

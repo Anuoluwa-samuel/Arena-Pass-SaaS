@@ -23,7 +23,7 @@ function key(): Buffer {
   // and rotating SESSION_SECRET there simply invalidates stored credentials,
   // which is the safe direction to fail.
   const material = env.CREDENTIALS_KEY ?? env.SESSION_SECRET
-  return createHash("sha256").update(`arena-pass:credentials:${material}`).digest()
+  return createHash("sha256").update(`game-slots:credentials:${material}`).digest()
 }
 
 export function encryptSecret(plaintext: string): string {

@@ -1,6 +1,6 @@
 # Retheme phase 1 — theme system + whitish gradient light palette
 
-Add a real light/dark mode to Arena Pass and move the light theme to a whitish
+Add a real light/dark mode to Game Slots and move the light theme to a whitish
 gradient. No glassmorphism in this phase — glass is phase 2, and it is far
 easier to judge once a real light background exists to judge it against.
 
@@ -36,7 +36,7 @@ easier to judge once a real light background exists to judge it against.
 
 ## 2. Light palette — whitish gradient
 - Author a genuine light `:root`: near-white surfaces, dark foreground, keeping
-  the Arena Pass green `--primary` as the single accent. It must stay
+  the Game Slots green `--primary` as the single accent. It must stay
   recognisably the same product, not a generic white dashboard.
 - Keep the existing dark values under `.dark`.
 - The whitish gradient is a page-level ambient background, not a per-card
@@ -63,5 +63,5 @@ easier to judge once a real light background exists to judge it against.
 - `npm run dev` (port 4000) and walk in BOTH themes: home, a session detail,
   checkout, a digital ticket, admin dashboard, admin data table.
 - Screenshot each in light and dark and show me before you call it done.
-- `docs/DESIGN.md` updated: it currently opens "Arena Pass is dark-first" and
+- `docs/DESIGN.md` updated: it currently opens "Game Slots is dark-first" and
   documents a single palette. It needs the dual palette and the gradient token.

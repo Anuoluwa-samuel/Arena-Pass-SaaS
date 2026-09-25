@@ -79,7 +79,7 @@ const timestamps = {
 // ---------------------------------------------------------------------------
 
 /**
- * The commercial entity that signs up for Arena Pass and owns the
+ * The commercial entity that signs up for Game Slots and owns the
  * subscription. One organization may own several arenas; today the product
  * creates one arena per organization, but nothing in the schema assumes it.
  */
@@ -107,7 +107,7 @@ export const arenas = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "restrict" }),
-    /** Globally unique: it is the tenant's subdomain (`{slug}.arenapass.com`). */
+    /** Globally unique: it is the tenant's subdomain (`{slug}.gameslots.com`). */
     slug: text("slug").notNull().unique(),
     name: text("name").notNull(),
     description: text("description"),
@@ -194,7 +194,7 @@ export const arenaPaymentAccounts = pgTable(
 )
 
 // ---------------------------------------------------------------------------
-// Billing — what an organization pays Arena Pass
+// Billing — what an organization pays Game Slots
 //
 // Entirely separate from `payments`, which is what an arena's customers pay
 // the arena. Two financial domains, two vocabularies, no shared code path: a
@@ -396,7 +396,7 @@ export const users = pgTable(
   "users",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** Non-null only for Arena Pass staff. Must reference a PLATFORM-scoped role. */
+    /** Non-null only for Game Slots staff. Must reference a PLATFORM-scoped role. */
     platformRoleId: uuid("platform_role_id").references(() => roles.id, { onDelete: "restrict" }),
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     email: text("email").notNull(),

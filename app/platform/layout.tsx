@@ -4,7 +4,7 @@ import { Building2, LayoutDashboard, ShieldAlert } from "lucide-react"
 import { getCurrentUser } from "@/server/auth/session"
 
 export const dynamic = "force-dynamic"
-export const metadata = { title: { default: "Platform", template: "%s · Arena Pass Platform" } }
+export const metadata = { title: { default: "Platform", template: "%s · Game Slots Platform" } }
 
 /**
  * The platform control centre.

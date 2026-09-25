@@ -48,7 +48,7 @@ export function PlatformHome({ rootDomain }: { rootDomain: string }) {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-        <span className="font-display text-xl font-semibold uppercase tracking-tight">Arena Pass</span>
+        <span className="font-display text-xl font-semibold uppercase tracking-tight">Game Slots</span>
         <div className="flex items-center gap-1 sm:gap-2">
           <ThemeToggle />
           <Link
@@ -84,7 +84,7 @@ export function PlatformHome({ rootDomain }: { rootDomain: string }) {
 
           <Reveal trigger="mount" delay={0.4}>
             <p className="mx-auto mt-7 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground max-sm:mt-5 max-sm:text-base">
-              Arena Pass gives your venue its own booking site, its own payments and its own staff
+              Game Slots gives your venue its own booking site, its own payments and its own staff
               accounts. Set up takes a few minutes, and nothing is charged until you launch.
             </p>
           </Reveal>
@@ -157,7 +157,7 @@ export function PlatformHome({ rootDomain }: { rootDomain: string }) {
 
       <footer className="mt-auto border-t">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm text-muted-foreground sm:px-6 lg:px-8">
-          <span>&copy; {new Date().getFullYear()} Arena Pass</span>
+          <span>&copy; {new Date().getFullYear()} Game Slots</span>
           <div className="flex gap-5">
             <Link href="/start" className="transition-colors hover:text-foreground">
               Open an arena

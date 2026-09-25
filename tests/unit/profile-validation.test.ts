@@ -30,7 +30,7 @@ describe("profile schema", () => {
   })
   it("rejects reserved usernames in any case", () => {
     expect(profileSchema.safeParse({ ...base, username: "Admin" }).success).toBe(false)
-    expect(profileSchema.safeParse({ ...base, username: "arenapass" }).success).toBe(false)
+    expect(profileSchema.safeParse({ ...base, username: "gameslots" }).success).toBe(false)
   })
   it("only allows known options", () => {
     expect(profileSchema.safeParse({ ...base, preferredPosition: "striker" }).success).toBe(false)

@@ -56,7 +56,7 @@ export async function ensureBaseline(database: Database) {
   if (!organization) {
     ;[organization] = await database
       .insert(schema.organizations)
-      .values({ slug: "main", name: process.env.APP_NAME ?? "Arena Pass", status: "ACTIVE" })
+      .values({ slug: "main", name: process.env.APP_NAME ?? "Game Slots", status: "ACTIVE" })
       .returning()
     logger.info("baseline.organization_created", { organizationId: organization.id })
   }
@@ -70,7 +70,7 @@ export async function ensureBaseline(database: Database) {
       .insert(schema.arenas)
       .values({
         slug: "main",
-        name: process.env.APP_NAME ?? "Arena Pass",
+        name: process.env.APP_NAME ?? "Game Slots",
         city: "Lagos",
         organizationId: organization.id,
         status: "ACTIVE",
@@ -104,7 +104,7 @@ export async function ensureBaseline(database: Database) {
   // Bootstrap super admin (credentials from env, dev defaults otherwise)
   const [{ count }] = await database.select({ count: sql<number>`count(*)::int` }).from(schema.users)
   if (Number(count) === 0) {
-    const email = process.env.BOOTSTRAP_ADMIN_EMAIL ?? "admin@arenapass.local"
+    const email = process.env.BOOTSTRAP_ADMIN_EMAIL ?? "admin@gameslots.local"
     const password = process.env.BOOTSTRAP_ADMIN_PASSWORD ?? "ChangeMe123!"
     // A public deployment must never get the well-known development login.
     if (process.env.NODE_ENV === "production") assertSafeBootstrapAdmin(process.env.BOOTSTRAP_ADMIN_EMAIL, process.env.BOOTSTRAP_ADMIN_PASSWORD)
@@ -127,7 +127,7 @@ export async function ensureBaseline(database: Database) {
 
 /** Refuses the development defaults or a weak password for the first production admin. */
 export function assertSafeBootstrapAdmin(email: string | undefined, password: string | undefined) {
-  if (!email || email.toLowerCase() === "admin@arenapass.local") {
+  if (!email || email.toLowerCase() === "admin@gameslots.local") {
     throw new Error("Set BOOTSTRAP_ADMIN_EMAIL to a real address before the first production start")
   }
   if (!password || password === "ChangeMe123!" || password.length < 12) {

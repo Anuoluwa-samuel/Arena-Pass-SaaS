@@ -168,7 +168,7 @@ export function TicketScanner({ sessions }: { sessions: Array<{ id: string; labe
                   {"reason" in outcome && outcome.reason && <Row label="Reason" value={outcome.reason} />}
                 </dl>
               ) : (
-                <p className="mt-4 text-foreground">The code is not a recognised Arena Pass ticket. Ask the customer to show the ticket from their email or account.</p>
+                <p className="mt-4 text-foreground">The code is not a recognised Game Slots ticket. Ask the customer to show the ticket from their email or account.</p>
               )}
             </motion.div>
           )}

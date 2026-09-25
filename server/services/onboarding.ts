@@ -11,7 +11,7 @@ import { listPaymentAccounts } from "@/server/payments/accounts"
 import { recordAudit, type AuditActor } from "./audit"
 
 /**
- * How an arena joins Arena Pass, and how it is walked to its opening day.
+ * How an arena joins Game Slots, and how it is walked to its opening day.
  *
  * Registration creates four things that must exist together — an identity, an
  * organization, an arena and the membership that ties them — so it runs in one
@@ -57,7 +57,7 @@ export async function registerArena(input: RegisterArenaInput, meta: { ip?: stri
 
   try {
     const created = await database.transaction(async (tx) => {
-      // An existing Arena Pass identity may open a second arena; the password
+      // An existing Game Slots identity may open a second arena; the password
       // in the form is ignored in that case, because it would be a way to
       // overwrite someone else's credentials by knowing their address.
       const existingUser = await tx.query.users.findFirst({

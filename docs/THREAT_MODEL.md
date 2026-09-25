@@ -1,6 +1,6 @@
 # Threat model
 
-What Arena Pass protects, from whom, and what is still open.
+What Game Slots protects, from whom, and what is still open.
 
 Scope: the multi-tenant SaaS platform — one deployment serving many
 independent arenas, their staff, and their customers.

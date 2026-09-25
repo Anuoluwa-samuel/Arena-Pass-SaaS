@@ -7,7 +7,7 @@ const EVENTS = ["Floodlit Derby", "Sunset Cup", "Midweek Match", "Lunchtime Leag
 const VENUES = ["Main Pitch", "Pitch A", "Pitch B", "Rooftop Arena", "Indoor Dome", "Astro Court 2"]
 const START_HOURS = [7, 9, 12, 16, 17, 18, 19, 20]
 const PRICES = [1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 6000]
-// Arena Pass sessions are always 4 players per team; only the number of teams varies.
+// Game Slots sessions are always 4 players per team; only the number of teams varies.
 const FORMATS: Array<[teams: number, players: number]> = [[4, 4], [5, 4], [6, 4], [8, 4]]
 
 const pick = <T,>(items: readonly T[]) => items[Math.floor(Math.random() * items.length)]

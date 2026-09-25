@@ -68,7 +68,7 @@ export function normalizeHostname(raw: string | null | undefined): string | null
   return host
 }
 
-/** The domain arena subdomains hang off, e.g. `arenapass.com`. */
+/** The domain arena subdomains hang off, e.g. `gameslots.com`. */
 export function rootDomain(): string {
   if (env.APP_ROOT_DOMAIN) return env.APP_ROOT_DOMAIN.toLowerCase()
   const fromAppUrl = normalizeHostname(new URL(env.APP_URL).host)
@@ -78,8 +78,8 @@ export function rootDomain(): string {
 /**
  * Whether a hostname is the platform's own, rather than any arena's.
  *
- * True only for the root domain itself and its `www` form — `arenapass.com`,
- * `www.arenapass.com`, or `localhost` in development. This is where the
+ * True only for the root domain itself and its `www` form — `gameslots.com`,
+ * `www.gameslots.com`, or `localhost` in development. This is where the
  * welcome and sign-up pages live, because it is the address an operator
  * reaches before they have an arena at all.
  *
@@ -107,7 +107,7 @@ export function devOverrideAllowed(isProd: boolean = env.isProd): boolean {
 /**
  * Extracts the arena slug from `{slug}.{root}`. Returns null when the host is
  * the root itself, a reserved subdomain, or a deeper name — one label only, so
- * `a.b.arenapass.com` is not silently read as arena `a`.
+ * `a.b.gameslots.com` is not silently read as arena `a`.
  */
 export function subdomainOf(host: string, root = rootDomain()): string | null {
   if (host === root) return null

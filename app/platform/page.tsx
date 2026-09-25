@@ -22,7 +22,7 @@ export default async function PlatformOverviewPage() {
     <div className="space-y-6">
       <PageHeader
         title="Platform overview"
-        description="Every organization and arena on Arena Pass. These totals span tenants — no arena can see them."
+        description="Every organization and arena on Game Slots. These totals span tenants — no arena can see them."
       />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tiles.map(([label, value, sub]) => (

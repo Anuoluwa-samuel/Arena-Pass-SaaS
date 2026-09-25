@@ -1,4 +1,4 @@
-# Arena Pass
+# Game Slots
 
 Football arena session management and e-ticketing. Arena owners schedule sessions of **8 teams × 4 players (32 slots)**, customers book a slot and pay online, and staff validate QR tickets at the gate. Includes a CMS-style admin control centre with role-based access.
 
@@ -22,9 +22,9 @@ npm run db:seed             # migrations + baseline + sample data
 npm run dev                 # http://localhost:4000
 ```
 
-Admin: http://localhost:4000/admin — `admin@arenapass.local` / `ChangeMe123!`
+Admin: http://localhost:4000/admin — `admin@gameslots.local` / `ChangeMe123!`
 
-Other seeded staff accounts (same password): `grace.admin@`, `musa.manager@`, `folake.finance@`, `sam.staff@`, `tola.ticketagent@` (all `@arenapass.local`).
+Other seeded staff accounts (same password): `grace.admin@`, `musa.manager@`, `folake.finance@`, `sam.staff@`, `tola.ticketagent@` (all `@gameslots.local`).
 
 With `PAYMENT_PROVIDER=mock`, checkout redirects to a test page where you choose a successful or declined payment; the rest of the pipeline (verification, ticket issue, email) runs exactly as in production.
 

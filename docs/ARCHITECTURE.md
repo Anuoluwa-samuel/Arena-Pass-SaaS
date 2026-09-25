@@ -73,7 +73,7 @@ provider webhook   ─► POST /api/payments/webhook (signature checked) ─┘
 
 `verifyPayment()` is the only path that creates a ticket. It re-queries the provider, checks amount and currency, then in one transaction marks the payment PAID, writes a CHARGE ledger row, flips the slot to CONFIRMED, moves `held_count → booked_count`, marks the session FULL if needed, and inserts the ticket (`ticket_number` from a sequence, random `qr_token`). It is idempotent: callback, webhook and refresh can all call it.
 
-Card data never touches Arena Pass. The mock provider is refused in production by `server/env.ts`.
+Card data never touches Game Slots. The mock provider is refused in production by `server/env.ts`.
 
 ## Tickets and validation
 

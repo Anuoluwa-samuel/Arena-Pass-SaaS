@@ -13,7 +13,7 @@ page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()) })
 page.on("pageerror", (e) => errors.push("PAGEERROR " + e.message))
 if (args.includes("--admin")) {
   await page.goto("http://localhost:4000/admin/login", { waitUntil: "networkidle" })
-  await page.fill("#email", "admin@arenapass.local"); await page.fill("#password", "ChangeMe123!")
+  await page.fill("#email", "admin@gameslots.local"); await page.fill("#password", "ChangeMe123!")
   await page.click("button[type=submit]"); await page.waitForURL(/\/admin(?!\/login)/, { timeout: 60000 })
 }
 for (const url of args.filter((a) => a.startsWith("/"))) {

@@ -22,7 +22,7 @@ export const DEFAULT_HOMEPAGE: HomepageContent = {
   },
   cta: {
     title: "Ready to Play?",
-    description: "Join thousands of players who book their sessions through Arena Pass.",
+    description: "Join thousands of players who book their sessions through Game Slots.",
     buttonLabel: "Browse Sessions",
     buttonHref: "/sessions",
   },
@@ -30,9 +30,9 @@ export const DEFAULT_HOMEPAGE: HomepageContent = {
 }
 
 export const DEFAULT_ABOUT: AboutContent = {
-  title: "About Arena Pass",
+  title: "About Game Slots",
   description:
-    "Arena Pass is the easiest way to book a place in organised 4-a-side football sessions. We manage the pitch, the teams and the kick-off so all you have to do is show up and play.",
+    "Game Slots is the easiest way to book a place in organised 4-a-side football sessions. We manage the pitch, the teams and the kick-off so all you have to do is show up and play.",
   mission: "Make organised football accessible to everyone, every week.",
   vision: "A pitch full of players in every city, every evening.",
   imageUrl: null,
@@ -44,7 +44,7 @@ export const DEFAULT_SERVICES: ServicesPageContent = {
 }
 
 export const DEFAULT_CONTACT: ContactContent = {
-  email: "hello@arenapass.local",
+  email: "hello@gameslots.local",
   phone: "+234 800 000 0000",
   address: "Lagos, Nigeria",
   whatsapp: "",

@@ -13,9 +13,9 @@ const sans = Manrope({ subsets: ['latin'], variable: '--font-manrope', display: 
 const mono = DM_Mono({ subsets: ['latin'], weight: ['300', '400', '500'], variable: '--font-dm-mono', display: 'swap' })
 
 export const metadata: Metadata = {
-  title: { default: 'Arena Pass — Football Session Tickets', template: '%s · Arena Pass' },
+  title: { default: 'Game Slots — Football Session Tickets', template: '%s · Game Slots' },
   description: 'Book a slot in organised 8-team football sessions. Secure payment, instant digital ticket, QR entry.',
-  applicationName: 'Arena Pass',
+  applicationName: 'Game Slots',
   icons: {
     icon: [
       {

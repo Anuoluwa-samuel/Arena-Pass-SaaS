@@ -38,7 +38,7 @@ test("customer books a slot, pays, receives a QR ticket; staff admit it once @mo
   const staff = await browser.newContext()
   const admin = await staff.newPage()
   await admin.goto("/admin/login")
-  await admin.fill("#email", "admin@arenapass.local")
+  await admin.fill("#email", "admin@gameslots.local")
   await admin.fill("#password", "ChangeMe123!")
   await admin.getByRole("button", { name: "Sign in" }).click()
   await expect(admin).toHaveURL(/\/admin$/, { timeout: 60_000 })

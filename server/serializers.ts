@@ -101,7 +101,7 @@ export function toPublicTicket(d: TicketDetail) {
     usedAt: d.ticket.usedAt?.toISOString() ?? null,
     team: d.team ? { number: d.team.teamNumber, name: d.team.name } : null,
     slotNumber: d.slot?.slotNumber ?? null,
-    arenaName: d.arena?.name ?? "Arena Pass",
+    arenaName: d.arena?.name ?? "Game Slots",
     session: { id: d.session.id, title: d.session.title, venue: d.session.venue, startsAt: d.session.startsAt.toISOString(), endsAt: d.session.endsAt.toISOString(), status: d.session.status },
     accessKey: ticketAccessKey(d.ticket.ticketNumber),
   }

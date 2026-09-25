@@ -31,7 +31,7 @@ interface NavbarProps {
   logoUrl?: string | null
 }
 
-export function Navbar({ customer = null, siteName = "Arena Pass", logoUrl = null }: NavbarProps) {
+export function Navbar({ customer = null, siteName = "Game Slots", logoUrl = null }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [hidden, setHidden] = useState(false)

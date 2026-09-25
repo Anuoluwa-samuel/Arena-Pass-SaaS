@@ -59,7 +59,7 @@ export const TRANSACTION_TYPE = ["CHARGE", "REFUND"] as const
 export type TransactionType = (typeof TRANSACTION_TYPE)[number]
 
 /**
- * Roles come in two scopes. A PLATFORM role governs the Arena Pass platform
+ * Roles come in two scopes. A PLATFORM role governs the Game Slots platform
  * itself and is held through `users.platform_role_id`; an ARENA role governs
  * one tenant and is held through an `arena_memberships` row. A role is never
  * both, so a platform operator cannot silently inherit tenant access and a
@@ -118,10 +118,10 @@ export const PAYMENT_ACCOUNT_STATUS = ["PENDING", "ACTIVE", "DISABLED"] as const
 export type PaymentAccountStatus = (typeof PAYMENT_ACCOUNT_STATUS)[number]
 
 /**
- * The SaaS subscription an organization holds with Arena Pass.
+ * The SaaS subscription an organization holds with Game Slots.
  *
  * Deliberately a separate vocabulary from `PAYMENT_STATUS`: an arena's
- * customers paying for football and an arena paying for Arena Pass are
+ * customers paying for football and an arena paying for Game Slots are
  * different financial domains that must never share a code path.
  */
 export const SUBSCRIPTION_STATUS = ["TRIALING", "ACTIVE", "PAST_DUE", "CANCELLED", "EXPIRED"] as const

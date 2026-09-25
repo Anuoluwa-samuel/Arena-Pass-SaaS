@@ -18,7 +18,7 @@ export default async function StartPage() {
   return (
     <main className="mx-auto max-w-lg px-4 py-14 sm:py-20">
       <PageHeader
-        eyebrow="Arena Pass"
+        eyebrow="Game Slots"
         title="Open your arena"
         description="Take bookings, issue tickets and run the gate. Set up takes a few minutes and nothing is charged until you launch."
       />

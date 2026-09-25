@@ -2,7 +2,7 @@
 
 Two financial domains live in this system. They must never be confused.
 
-| | An arena's customers → the arena | An organization → Arena Pass |
+| | An arena's customers → the arena | An organization → Game Slots |
 | --- | --- | --- |
 | What | A football slot | The SaaS subscription |
 | Tables | `payments`, `transactions` | `plans`, `subscriptions`, `subscription_events`, `usage_records` |

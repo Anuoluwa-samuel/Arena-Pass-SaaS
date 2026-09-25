@@ -1,4 +1,4 @@
-# Arena Pass — Phase 1 Audit Report
+# Game Slots — Phase 1 Audit Report
 
 Date: 2026-09-11
 Scope: the repository as committed in `31b8641 Initial commit: PlayPass football e-ticketing UI`.
@@ -105,6 +105,6 @@ Key decisions and why:
 - **Idempotency keys** on booking creation and **provider verification** before confirmation. A ticket row has a unique `booking_id`, so a confirmed payment creates a ticket exactly once.
 - **Server-side sessions** (opaque token in an httpOnly cookie, hashed at rest) rather than JWTs, so logout and privilege changes take effect immediately.
 - **RBAC stored in the database** (roles → permissions) and enforced in every route handler through `requirePermission`. UI hides what the user cannot do, but the API is the authority.
-- **Payment abstraction** so Paystack can be swapped for Flutterwave or Stripe without touching booking logic. Card data never touches Arena Pass servers.
+- **Payment abstraction** so Paystack can be swapped for Flutterwave or Stripe without touching booking logic. Card data never touches Game Slots servers.
 - **Signed QR payload.** The QR encodes `ticket_number.hmac` and nothing personal; validation checks the signature, then performs a conditional `UPDATE … WHERE status = 'CONFIRMED'` so a ticket can only be used once.
 - **Multi-arena from day one.** Every session, ticket and CMS record carries `arena_id`.

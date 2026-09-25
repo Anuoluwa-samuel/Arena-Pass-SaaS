@@ -66,9 +66,12 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------
-  // Arena A — the arena the platform owner already operates.
+  // Arena A — the arena the platform owner already operates. The baseline
+  // names it after the platform, which was fine when the product *was* one
+  // arena; as a tenant among others it needs a venue's name.
   // ---------------------------------------------------------------------
   const arenaA = await getDefaultArena()
+  await database.update(schema.arenas).set({ name: "Ikeja City Arena" }).where(eq(schema.arenas.id, arenaA.id))
   const platformOwner = (await database.query.users.findFirst())!
 
   // ---------------------------------------------------------------------
@@ -88,9 +91,9 @@ async function main() {
   const plans: ArenaPlan[] = [
     {
       arenaId: arenaA.id,
-      label: "Arena Pass",
+      label: "Ikeja City Arena",
       emailDomain: "example.com",
-      staffDomain: "arenapass.local",
+      staffDomain: "ikeja.local",
       primaryPitch: "Main Pitch",
       secondPitch: "Pitch B",
       priceMajor: 5000,
@@ -113,10 +116,10 @@ async function main() {
   for (const plan of plans) await seedArena(plan)
 
   console.log("\nSeed complete — two arenas.")
-  console.log("  Platform owner : admin@arenapass.local / ChangeMe123!  (also ARENA_OWNER of Arena Pass)")
+  console.log("  Platform owner : admin@gameslots.local / ChangeMe123!  (also ARENA_OWNER of Game Slots)")
   console.log("  Arena B owner  : owner@lekki.local / ChangeMe123!")
   console.log("  Staff          : grace.admin@, musa.manager@, folake.finance@, sam.staff@, tola.ticketagent@")
-  console.log("                   at @arenapass.local and @lekki.local respectively")
+  console.log("                   at @gameslots.local and @lekki.local respectively")
   console.log("  Shared customer: ada.shared@example.com plays at both arenas, with a separate account at each")
   console.log("\n  Reach them with  Host: main.localhost  and  Host: lekki.localhost")
   process.exit(0)

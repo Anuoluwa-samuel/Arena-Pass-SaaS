@@ -16,7 +16,7 @@ afterAll(async () => {
 })
 
 /** Every resolution test states the root domain rather than relying on the environment. */
-const ROOT = "arenapass.com"
+const ROOT = "gameslots.com"
 const opts = { root: ROOT } as const
 
 async function createArena(slug: string, status: schema.Arena["status"] = "ACTIVE") {
@@ -30,17 +30,17 @@ async function createArena(slug: string, status: schema.Arena["status"] = "ACTIV
 
 describe("hostname normalisation", () => {
   it("lowercases and strips the port and trailing dot", () => {
-    expect(normalizeHostname("Lekki.ArenaPass.com:4000")).toBe("lekki.arenapass.com")
-    expect(normalizeHostname("lekki.arenapass.com.")).toBe("lekki.arenapass.com")
+    expect(normalizeHostname("Lekki.GameSlots.com:4000")).toBe("lekki.gameslots.com")
+    expect(normalizeHostname("lekki.gameslots.com.")).toBe("lekki.gameslots.com")
   })
 
   it("rejects anything that is not a bare hostname", () => {
     // A Host header is attacker-controlled; none of these may reach a query.
     expect(normalizeHostname("evil.com/../admin")).toBeNull()
-    expect(normalizeHostname("lekki.arenapass.com/path")).toBeNull()
+    expect(normalizeHostname("lekki.gameslots.com/path")).toBeNull()
     expect(normalizeHostname("user@evil.com")).toBeNull()
-    expect(normalizeHostname("lekki..arenapass.com")).toBeNull()
-    expect(normalizeHostname(".arenapass.com")).toBeNull()
+    expect(normalizeHostname("lekki..gameslots.com")).toBeNull()
+    expect(normalizeHostname(".gameslots.com")).toBeNull()
     expect(normalizeHostname("lekki arena.com")).toBeNull()
     expect(normalizeHostname("")).toBeNull()
     expect(normalizeHostname(null)).toBeNull()
@@ -48,62 +48,62 @@ describe("hostname normalisation", () => {
 
   it("keeps an IPv6 literal but never treats it as a tenant", () => {
     expect(normalizeHostname("[::1]:4000")).toBe("[::1]")
-    expect(subdomainOf("[::1]", "arenapass.com")).toBeNull()
+    expect(subdomainOf("[::1]", "gameslots.com")).toBeNull()
   })
 })
 
 describe("subdomain extraction", () => {
-  const root = "arenapass.com"
+  const root = "gameslots.com"
 
   it("reads a single label beneath the root domain", () => {
-    expect(subdomainOf("lekki.arenapass.com", root)).toBe("lekki")
-    expect(subdomainOf("ikeja-north.arenapass.com", root)).toBe("ikeja-north")
+    expect(subdomainOf("lekki.gameslots.com", root)).toBe("lekki")
+    expect(subdomainOf("ikeja-north.gameslots.com", root)).toBe("ikeja-north")
   })
 
   it("ignores the root itself and unrelated domains", () => {
-    expect(subdomainOf("arenapass.com", root)).toBeNull()
-    expect(subdomainOf("arenapass.com.evil.com", root)).toBeNull()
-    expect(subdomainOf("notarenapass.com", root)).toBeNull()
+    expect(subdomainOf("gameslots.com", root)).toBeNull()
+    expect(subdomainOf("gameslots.com.evil.com", root)).toBeNull()
+    expect(subdomainOf("notgameslots.com", root)).toBeNull()
   })
 
   it("refuses nested labels so a.b.root is never read as arena 'a'", () => {
-    expect(subdomainOf("a.b.arenapass.com", root)).toBeNull()
+    expect(subdomainOf("a.b.gameslots.com", root)).toBeNull()
   })
 
   it("refuses reserved platform subdomains", () => {
     for (const reserved of ["www", "api", "admin", "app", "cdn"]) {
-      expect(subdomainOf(`${reserved}.arenapass.com`, root), reserved).toBeNull()
+      expect(subdomainOf(`${reserved}.gameslots.com`, root), reserved).toBeNull()
     }
   })
 })
 
 describe("the platform's own hostname", () => {
-  const root = "arenapass.com"
+  const root = "gameslots.com"
 
   it("recognises the root domain and its www form", () => {
-    expect(isPlatformHost("arenapass.com", root)).toBe(true)
-    expect(isPlatformHost("www.arenapass.com", root)).toBe(true)
-    expect(isPlatformHost("ARENAPASS.COM:3000", root)).toBe(true)
+    expect(isPlatformHost("gameslots.com", root)).toBe(true)
+    expect(isPlatformHost("www.gameslots.com", root)).toBe(true)
+    expect(isPlatformHost("GAMESLOTS.COM:3000", root)).toBe(true)
   })
 
   it("refuses a subdomain, so an unresolved arena stays a dead end", () => {
     // The welcome page must not appear at every name wildcard DNS accepts:
     // a typo, a decommissioned arena and a probe all deserve the same 404.
-    expect(isPlatformHost("lekki.arenapass.com", root)).toBe(false)
-    expect(isPlatformHost("nosucharena.arenapass.com", root)).toBe(false)
-    expect(isPlatformHost("www.lekki.arenapass.com", root)).toBe(false)
+    expect(isPlatformHost("lekki.gameslots.com", root)).toBe(false)
+    expect(isPlatformHost("nosucharena.gameslots.com", root)).toBe(false)
+    expect(isPlatformHost("www.lekki.gameslots.com", root)).toBe(false)
   })
 
   it("refuses an arena's own custom domain and any unrelated host", () => {
     expect(isPlatformHost("lekkiarena.com", root)).toBe(false)
-    expect(isPlatformHost("arenapass.com.evil.com", root)).toBe(false)
-    expect(isPlatformHost("notarenapass.com", root)).toBe(false)
+    expect(isPlatformHost("gameslots.com.evil.com", root)).toBe(false)
+    expect(isPlatformHost("notgameslots.com", root)).toBe(false)
   })
 
   it("refuses a missing or malformed host rather than defaulting open", () => {
     expect(isPlatformHost(null, root)).toBe(false)
     expect(isPlatformHost("", root)).toBe(false)
-    expect(isPlatformHost("..arenapass.com", root)).toBe(false)
+    expect(isPlatformHost("..gameslots.com", root)).toBe(false)
   })
 })
 
@@ -120,13 +120,13 @@ describe("tenant resolution", () => {
   })
 
   it("resolves an arena from its subdomain", async () => {
-    const resolved = await resolveTenantFromHost("lekki.arenapass.com", opts)
+    const resolved = await resolveTenantFromHost("lekki.gameslots.com", opts)
     expect(resolved?.source).toBe("subdomain")
     expect(resolved?.arena.slug).toBe("lekki")
   })
 
   it("does not fall through to another arena when the subdomain matches nothing", async () => {
-    expect(await resolveTenantFromHost("nosucharena.arenapass.com", opts)).toBeNull()
+    expect(await resolveTenantFromHost("nosucharena.gameslots.com", opts)).toBeNull()
   })
 
   it("resolves a verified custom domain", async () => {
@@ -145,7 +145,7 @@ describe("tenant resolution", () => {
 
   it("resolves an arena that is suspended or still in onboarding — status gating is a separate decision", async () => {
     await createArena("pending-arena", "PENDING_SETUP")
-    const resolved = await resolveTenantFromHost("pending-arena.arenapass.com", opts)
+    const resolved = await resolveTenantFromHost("pending-arena.gameslots.com", opts)
     expect(resolved?.arena.status).toBe("PENDING_SETUP")
   })
 

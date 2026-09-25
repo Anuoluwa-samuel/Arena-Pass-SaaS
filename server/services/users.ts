@@ -18,7 +18,7 @@ import { recordAudit, type AuditActor } from "./audit"
  * it from the request; it is never derived from the target user.
  *
  * Platform roles are not assignable here, so an arena owner cannot mint an
- * Arena Pass operator.
+ * Game Slots operator.
  */
 
 export const staffInputSchema = z.object({
@@ -120,7 +120,7 @@ export async function listStaff(
 }
 
 /**
- * Adds a staff member to this arena. An existing Arena Pass identity with the
+ * Adds a staff member to this arena. An existing Game Slots identity with the
  * same email is reused and given a membership — the same person can work for
  * two arenas — rather than being refused or duplicated.
  */
