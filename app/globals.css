@@ -74,15 +74,15 @@
   }
 }
 
-/* Arena Pass runs two themes from one token set.
-   Light: whitish gradient surfaces, deep pitch green.
-   Dark:  floodlit pitch — near-black surfaces, one vivid green.
+/* Game Slots runs two themes from one token set.
+   Light: cool gradient surfaces, one deep electric blue.
+   Dark:  floodlit night — near-black surfaces, one vivid blue.
    Light is the fallback when no class is set; `.dark` is applied by next-themes. */
 :root {
-  /* Morning pitch: sage-stone ground (not white) and deep ink, so glass cards
-     read as lighter panels with real depth instead of white on white. */
-  --background: oklch(0.925 0.02 165);
-  --foreground: oklch(0.19 0.03 200);
+  /* Cool stone ground (not white) and deep ink, so glass cards read as lighter
+     panels with real depth instead of white on white. */
+  --background: oklch(0.925 0.02 255);
+  --foreground: oklch(0.19 0.03 260);
   /* Surfaces are glass. `*-solid` holds the opaque colour (fallback when
      backdrop-filter is unsupported); the public token is a translucent tint of
      it. Anything painting bg-card / bg-sidebar / bg-popover gets the blur from
@@ -91,75 +91,75 @@
   --glass-blur: 10px;
   --card-solid: oklch(1 0 0);
   --card: color-mix(in oklch, var(--card-solid) var(--glass-tint), transparent);
-  --card-foreground: oklch(0.19 0.03 200);
+  --card-foreground: oklch(0.19 0.03 260);
   /* Floating layers (menus, dialogs, tooltips) cover other content, so they frost harder. */
-  --popover-solid: oklch(0.975 0.01 165);
+  --popover-solid: oklch(0.975 0.01 255);
   --popover: color-mix(in oklch, var(--popover-solid) 80%, transparent);
-  --popover-foreground: oklch(0.19 0.03 200);
-  /* Deeper than the dark-theme green: L 0.72 cannot carry white text or pass
-     4.5:1 as text on white, so light drops to L 0.54 and keeps the same hue. */
-  --primary: oklch(0.47 0.14 150);
+  --popover-foreground: oklch(0.19 0.03 260);
+  /* Deeper than the dark-theme blue, which is too light to carry white text.
+     White on this is 6.4:1 and it reads at 5.3:1 as text on the page. */
+  --primary: oklch(0.48 0.155 255);
   --primary-foreground: oklch(0.99 0 0);
   /* Status text on tinted chips over nearly clear glass needs more depth than the
      fill colour, so each tone has its own text token (dark reuses the fills). */
   --success-text: oklch(0.42 0.13 150);
   --danger-text: oklch(0.45 0.18 27);
   --warning-text: oklch(0.47 0.12 70);
-  --info-text: oklch(0.45 0.12 240);
-  --secondary: oklch(0.89 0.022 165);
-  --secondary-foreground: oklch(0.22 0.03 200);
-  --muted: oklch(0.89 0.022 165);
+  --info-text: oklch(0.45 0.12 200);
+  --secondary: oklch(0.89 0.022 255);
+  --secondary-foreground: oklch(0.22 0.03 260);
+  --muted: oklch(0.89 0.022 255);
   /* 0.44 (was 0.47): keeps ≥ 4.5:1 over the brightest gradient blob seen through 10% glass. */
-  --muted-foreground: oklch(0.4 0.025 200);
-  --accent: oklch(0.47 0.14 150);
+  --muted-foreground: oklch(0.4 0.025 260);
+  --accent: oklch(0.48 0.155 255);
   --accent-foreground: oklch(0.99 0 0);
   --destructive: oklch(0.52 0.21 27);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.8 0.025 170);
-  --input: oklch(0.87 0.02 170);
-  --ring: oklch(0.47 0.14 150);
-  --chart-1: oklch(0.47 0.14 150);
-  --chart-2: oklch(0.63 0.14 150);
-  --chart-3: oklch(0.71 0.12 150);
-  --chart-4: oklch(0.46 0.13 150);
-  --chart-5: oklch(0.79 0.09 150);
+  --border: oklch(0.8 0.025 255);
+  --input: oklch(0.87 0.02 255);
+  --ring: oklch(0.48 0.155 255);
+  --chart-1: oklch(0.48 0.155 255);
+  --chart-2: oklch(0.63 0.14 255);
+  --chart-3: oklch(0.71 0.12 255);
+  --chart-4: oklch(0.46 0.13 255);
+  --chart-5: oklch(0.79 0.09 255);
   --radius: 0.75rem;
-  --sidebar-solid: oklch(0.95 0.015 165);
+  --sidebar-solid: oklch(0.95 0.015 255);
   --sidebar: color-mix(in oklch, var(--sidebar-solid) var(--glass-tint), transparent);
-  --sidebar-foreground: oklch(0.19 0.03 200);
-  --sidebar-primary: oklch(0.47 0.14 150);
+  --sidebar-foreground: oklch(0.19 0.03 260);
+  --sidebar-primary: oklch(0.48 0.155 255);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.88 0.03 160);
-  --sidebar-accent-foreground: oklch(0.2 0.03 200);
-  --sidebar-border: oklch(0.8 0.025 170);
-  --sidebar-ring: oklch(0.47 0.14 150);
+  --sidebar-accent: oklch(0.88 0.03 255);
+  --sidebar-accent-foreground: oklch(0.2 0.03 260);
+  --sidebar-border: oklch(0.8 0.025 255);
+  --sidebar-ring: oklch(0.48 0.155 255);
   --success: oklch(0.47 0.14 150);
   --warning: oklch(0.62 0.14 70);
 
   /* Ambient page background. One token, two themes — the body rule never changes. */
-  /* Aurora: emerald, teal, lime and mint blobs over a pale mint wash. Blobs stay
-     at L ≥ 0.93 so body and muted text keep their contrast through clear glass. */
+  /* Aurora: azure, cyan, indigo and periwinkle blobs over a pale blue wash.
+     Blobs stay light so body and muted text keep contrast through clear glass. */
   --gradient-page:
-    radial-gradient(60% 55% at 6% 0%, oklch(0.87 0.09 155 / 0.95), transparent 70%),
-    radial-gradient(55% 50% at 98% 8%, oklch(0.88 0.07 195 / 0.9), transparent 70%),
-    radial-gradient(60% 55% at 85% 100%, oklch(0.89 0.09 130 / 0.9), transparent 70%),
-    radial-gradient(50% 45% at 0% 92%, oklch(0.88 0.07 175 / 0.85), transparent 70%),
-    linear-gradient(160deg, oklch(0.93 0.02 165) 0%, oklch(0.9 0.03 175) 100%);
+    radial-gradient(60% 55% at 6% 0%, oklch(0.87 0.09 255 / 0.95), transparent 70%),
+    radial-gradient(55% 50% at 98% 8%, oklch(0.88 0.07 220 / 0.9), transparent 70%),
+    radial-gradient(60% 55% at 85% 100%, oklch(0.89 0.09 255 / 0.9), transparent 70%),
+    radial-gradient(50% 45% at 0% 92%, oklch(0.88 0.07 220 / 0.85), transparent 70%),
+    linear-gradient(160deg, oklch(0.93 0.02 255) 0%, oklch(0.9 0.03 220) 100%);
 
   /* Floodlight backdrop (components/site/floodlight-backdrop.tsx). Light mode is
-     daylight: soft emerald/teal beams at low strength so text keeps contrast. */
+     daylight: soft azure/cyan beams at low strength so text keeps contrast. */
   /* Beams stay at L >= 0.84 so muted text (L 0.4) keeps >= 4.5:1 through clear glass;
      colour comes from chroma, not darkness. */
-  --streak-core: oklch(0.85 0.15 150);
-  --streak-edge: oklch(0.87 0.1 190);
-  --streak-glow: oklch(0.86 0.12 135);
+  --streak-core: oklch(0.85 0.15 255);
+  --streak-edge: oklch(0.87 0.1 220);
+  --streak-glow: oklch(0.86 0.12 230);
   --streak-opacity: 0.8;
   --dot-color: color-mix(in oklch, var(--foreground) 16%, transparent);
   /* Headline shimmer highlight. Light keeps it dark enough (>= 4.5:1 on white)
      that the sweep never washes letters out. */
-  --shimmer: oklch(0.62 0.18 145);
+  --shimmer: oklch(0.62 0.18 255);
   /* Signature arrow tile: ink on light, white on dark. */
-  --tile-bg: oklch(0.19 0.03 200);
+  --tile-bg: oklch(0.19 0.03 260);
   --tile-fg: oklch(0.99 0 0);
 
   /* Hero pitch markings: colour and strength are themed, the geometry is not. */
@@ -168,10 +168,10 @@
 
   /* Recharts takes plain colour strings, so chart marks need their own tokens
      rather than Tailwind classes. Contrast-tuned per theme. */
-  --chart-mark: oklch(0.47 0.14 150);
-  --chart-grid: oklch(0.82 0.02 170);
-  --chart-axis: oklch(0.4 0.025 200);
-  --chart-cursor: oklch(0.88 0.03 160);
+  --chart-mark: oklch(0.48 0.155 255);
+  --chart-grid: oklch(0.82 0.02 255);
+  --chart-axis: oklch(0.4 0.025 260);
+  --chart-cursor: oklch(0.88 0.03 255);
 
   /* Glass surface (see .glass / .glass-bar below). Light glass needs a visible
      edge: a white rim disappears on a whitish page, so the border is a real
@@ -181,26 +181,26 @@
   --glass-bar-bg: color-mix(in oklch, var(--background) 45%, transparent);
   --glass-border: oklch(1 0 0 / 0.55);
   --glass-highlight: oklch(1 0 0 / 0.8);
-  --glass-shadow: 0 16px 40px -18px oklch(0.28 0.06 170 / 0.35), 0 0 0 1px oklch(0.3 0.03 170 / 0.06);
+  --glass-shadow: 0 16px 40px -18px oklch(0.28 0.06 255 / 0.35), 0 0 0 1px oklch(0.3 0.03 255 / 0.06);
   --glass-fallback: var(--card-solid);
 }
 
 .dark {
-  /* Stadium night: near-black with a cool cast, so green floodlights glow. */
+  /* Stadium night: near-black with a cool cast, so the blue floodlights glow. */
   --background: oklch(0.1 0.012 255);
   /* Beam brightness is the contrast budget: glass is ~10% tint, so text sits
      almost directly on the beams. Core L 0.5 at 0.65 opacity keeps muted text
      (L 0.72) >= 4.5:1 where a beam crosses it, and still glows against L 0.1. */
-  --streak-core: oklch(0.5 0.16 148);
-  --streak-edge: oklch(0.4 0.09 190);
-  --streak-glow: oklch(0.38 0.12 150);
+  --streak-core: oklch(0.5 0.16 255);
+  --streak-edge: oklch(0.4 0.09 220);
+  --streak-glow: oklch(0.38 0.12 255);
   --streak-opacity: 0.65;
   --success-text: oklch(0.8 0.18 145);
   --danger-text: oklch(0.72 0.17 27);
   --warning-text: var(--warning);
   --info-text: oklch(0.8 0.1 230);
   --dot-color: oklch(1 0 0 / 0.07);
-  --shimmer: oklch(0.88 0.17 140);
+  --shimmer: oklch(0.88 0.15 255);
   --tile-bg: oklch(0.98 0 0);
   --tile-fg: oklch(0.12 0.01 260);
   --foreground: oklch(0.98 0 0);
@@ -210,45 +210,45 @@
   --popover-solid: oklch(0.16 0.01 260);
   --popover: color-mix(in oklch, var(--popover-solid) 80%, transparent);
   --popover-foreground: oklch(0.98 0 0);
-  --primary: oklch(0.72 0.19 145);
+  --primary: oklch(0.7 0.155 255);
   --primary-foreground: oklch(0.12 0.01 260);
   --secondary: oklch(0.22 0.01 260);
   --secondary-foreground: oklch(0.98 0 0);
   --muted: oklch(0.22 0.01 260);
   --muted-foreground: oklch(0.75 0 0);
-  --accent: oklch(0.72 0.19 145);
+  --accent: oklch(0.7 0.155 255);
   --accent-foreground: oklch(0.12 0.01 260);
   --destructive: oklch(0.55 0.22 27);
   --destructive-foreground: oklch(0.98 0 0);
   --border: oklch(0.28 0.01 260);
   --input: oklch(0.22 0.01 260);
-  --ring: oklch(0.72 0.19 145);
-  --chart-1: oklch(0.72 0.19 145);
-  --chart-2: oklch(0.6 0.15 145);
-  --chart-3: oklch(0.5 0.12 145);
-  --chart-4: oklch(0.8 0.15 145);
-  --chart-5: oklch(0.45 0.1 145);
+  --ring: oklch(0.7 0.155 255);
+  --chart-1: oklch(0.7 0.155 255);
+  --chart-2: oklch(0.6 0.15 255);
+  --chart-3: oklch(0.5 0.12 255);
+  --chart-4: oklch(0.8 0.15 255);
+  --chart-5: oklch(0.45 0.1 255);
   --sidebar-solid: oklch(0.14 0.01 260);
   --sidebar: color-mix(in oklch, var(--sidebar-solid) var(--glass-tint), transparent);
   --sidebar-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.72 0.19 145);
+  --sidebar-primary: oklch(0.7 0.155 255);
   --sidebar-primary-foreground: oklch(0.12 0.01 260);
   --sidebar-accent: oklch(0.22 0.01 260);
   --sidebar-accent-foreground: oklch(0.98 0 0);
   --sidebar-border: oklch(0.28 0.01 260);
-  --sidebar-ring: oklch(0.72 0.19 145);
+  --sidebar-ring: oklch(0.7 0.155 255);
   --success: oklch(0.72 0.19 145);
   --warning: oklch(0.8 0.15 85);
 
   /* Blobs capped at L 0.26 (muted text L 0.65 stays ≈ 4.8:1 through clear glass).
      Visibility comes from chroma and coverage, not lightness. */
   --gradient-page:
-    radial-gradient(70% 60% at 6% 0%, oklch(0.26 0.09 155 / 0.95), transparent 72%),
-    radial-gradient(60% 55% at 98% 10%, oklch(0.25 0.07 200 / 0.9), transparent 72%),
-    radial-gradient(65% 60% at 85% 98%, oklch(0.26 0.08 135 / 0.9), transparent 72%),
-    radial-gradient(55% 50% at 2% 90%, oklch(0.24 0.06 175 / 0.85), transparent 72%),
-    radial-gradient(45% 40% at 50% 50%, oklch(0.2 0.045 165 / 0.7), transparent 72%),
-    linear-gradient(160deg, oklch(0.14 0.02 240) 0%, oklch(0.12 0.025 190) 100%);
+    radial-gradient(70% 60% at 6% 0%, oklch(0.26 0.09 255 / 0.95), transparent 72%),
+    radial-gradient(60% 55% at 98% 10%, oklch(0.25 0.07 260 / 0.9), transparent 72%),
+    radial-gradient(65% 60% at 85% 98%, oklch(0.26 0.08 230 / 0.9), transparent 72%),
+    radial-gradient(55% 50% at 2% 90%, oklch(0.24 0.06 220 / 0.85), transparent 72%),
+    radial-gradient(45% 40% at 50% 50%, oklch(0.2 0.045 255 / 0.7), transparent 72%),
+    linear-gradient(160deg, oklch(0.14 0.02 200) 0%, oklch(0.12 0.025 220) 100%);
 
   --pitch-line: color-mix(in oklch, var(--primary) 60%, transparent);
   --pitch-opacity: 0.07;
@@ -450,7 +450,7 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Arena Pass "come alive" layer. Everything below is decoration or motion;
+   Game Slots "come alive" layer. Everything below is decoration or motion;
    the global reduced-motion rule above collapses every animation here.
    ------------------------------------------------------------------------- */
 

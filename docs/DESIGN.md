@@ -1,6 +1,8 @@
 # Design system
 
-Arena Pass ships two themes from one token set. **Light** is a whitish gradient with a deep pitch green; **dark** is the floodlit pitch — near-black surfaces, one vivid green. Both read as sports-tech rather than a generic dashboard. Tokens live in `app/globals.css` as OKLCH CSS variables consumed by Tailwind 4 and shadcn/ui: `:root` holds the light values, `.dark` overrides them.
+Game Slots ships two themes from one token set. **Light** is a cool gradient with a deep electric blue; **dark** is the floodlit night — near-black surfaces, one vivid blue. Both read as sports-tech rather than a generic dashboard.
+
+Blue is the *platform's* colour. Any arena may replace the accent with its own, which is why nothing in the product hardcodes a brand colour: components read `--primary` and `--accent`, and `ArenaTheme` rewrites those two per tenant. See [MULTI_TENANCY.md](MULTI_TENANCY.md#branding). Tokens live in `app/globals.css` as OKLCH CSS variables consumed by Tailwind 4 and shadcn/ui: `:root` holds the light values, `.dark` overrides them.
 
 ## Theming
 
@@ -13,8 +15,8 @@ Rules: components use tokens only — never a raw colour, never a `dark:` overri
 | Token | Role |
 | --- | --- |
 | `--background` / `--card` / `--popover` | Surface steps. Light: 0.985 → white cards. Dark: 0.12 → 0.16 |
-| `--primary` (green) | The single accent: CTAs, live indicators, progress, prices. Light L 0.54 (carries white text, ≥ 4.5:1 as text on white); dark L 0.72 (carries dark text) |
-| `--gradient-page` | Ambient aurora painted once on `body` and fixed to the viewport: emerald, teal, lime and mint blobs over a mint wash (light) or near-black (dark). It is what the glass shows, so it doubles as the contrast budget. Never repeat it on cards |
+| `--primary` (blue, or the arena's own) | The single accent: CTAs, live indicators, progress, prices. Light `oklch(0.48 0.155 255)` — white text on it is 6.4:1, and it reads at 5.3:1 as text on the page; dark `oklch(0.7 0.155 255)` at 7.7:1 on the dark page |
+| `--gradient-page` | Ambient aurora painted once on `body` and fixed to the viewport: azure, cyan, indigo and periwinkle blobs over a pale blue wash (light) or near-black (dark). It is what the glass shows, so it doubles as the contrast budget. Never repeat it on cards |
 | `--pitch-line` / `--pitch-opacity` | Hero pitch-marking colour and layer strength (light needs more to register on white) |
 | `--chart-mark` / `--chart-grid` / `--chart-axis` / `--chart-cursor` | Recharts colours, passed as `var()` strings |
 | `--secondary` / `--muted` | Quiet fills for inputs, chips, skeletons |
@@ -38,7 +40,7 @@ The whole interface is glass over the aurora page gradient. Two settings drive i
 
 ## Typography
 
-Inter Tight carries headlines and body; DM Mono is the label voice and ticket numbers (both via `next/font` in `app/layout.tsx`, exposed as `--font-sans` / `--font-mono`). Headlines are large and light: `font-medium`, tight tracking (`tracking-[-0.035em]` to `-0.045em`), hero at `clamp(2.75rem, 7.5vw, 6rem)`. Section markers use `SectionLabel` ("02 /SESSIONS": green index, muted uppercase mono via the `label-mono` utility). Meta `text-sm text-muted-foreground`.
+Inter Tight carries headlines and body; DM Mono is the label voice and ticket numbers (both via `next/font` in `app/layout.tsx`, exposed as `--font-sans` / `--font-mono`). Headlines are large and light: `font-medium`, tight tracking (`tracking-[-0.035em]` to `-0.045em`), hero at `clamp(2.75rem, 7.5vw, 6rem)`. Section markers use `SectionLabel` ("02 /SESSIONS": brand-coloured index, muted uppercase mono via the `label-mono` utility). Meta `text-sm text-muted-foreground`.
 
 ## Spacing and layout
 
@@ -66,7 +68,7 @@ Tokens in `lib/motion.ts` (`EASE_OUT`, `DURATION.fast/base/slow`, `STAGGER`). Re
 Inspired by cinematic dark product sites, translated to a floodlit pitch. Every piece is decorative on top of working pages; none carries content.
 
 - **Floodlight backdrop** (`components/site/floodlight-backdrop.tsx`): two drifting blurred beams, a breathing glow and a dot grid, fixed behind the public site and customer shell. CSS transform/opacity only. Beam colours are tokens (`--streak-core/-edge/-glow`, `--streak-opacity`); **beam brightness is the contrast budget** because glass is ~10% tint. Dark core stays at L 0.5 × 0.65 opacity; re-run a contrast check before brightening.
-- **Scroll progress**: a 2px green line at the top of the viewport.
+- **Scroll progress**: a 2px brand-coloured line at the top of the viewport.
 - **`ArrowButton`** (`components/ui/arrow-button.tsx`): uppercase mono label plus a notched arrow tile; the arrow slides out and back in on hover and a sheen crosses the pill. `primary` for the main action, `glass` for secondary. Page-level actions use it; forms keep `Button`.
 - **`Button`** gained a sheen and glow on `default` and glass on `outline`; its API is unchanged.
 - **Motion primitives** (`components/motion.tsx`): `BlurText` (headlines resolve word by word out of a blur; the text stays real text), `CountUp` (server renders the real number, counts up on view), `Parallax`, plus `Reveal`/`StaggerGroup`. `Spotlight` (`components/spotlight.tsx`) adds a pointer-following glow to cards; `Marquee` is the homepage ticker; `FaqList` renders FAQs as expanding glass cards.
