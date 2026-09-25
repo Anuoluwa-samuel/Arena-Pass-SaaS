@@ -1,5 +1,9 @@
 # Architecture
 
+> Multi-tenancy is the organising constraint of this system. Read
+> **`docs/MULTI_TENANCY.md`** first; it explains the five layers that keep one
+> arena out of another.
+
 ## Overview
 
 ```
@@ -56,6 +60,8 @@ A session reads `FULL` when confirmed plus held slots reach capacity (`booked_co
 
 ## Payment flow
 
+> Full detail in [PAYMENTS.md](PAYMENTS.md); arena billing in [BILLING.md](BILLING.md).
+
 ```
 POST /api/bookings ─► createBooking ─► initializePayment ─► provider.initialize ─► authorizationUrl
                                                                    │
@@ -76,6 +82,8 @@ QR payload: `AP1.<qr_token>.<hmac>` — an opaque reference plus an HMAC so forg
 `validateTicket()` performs `UPDATE tickets SET status='USED' … WHERE id=? AND status='CONFIRMED'`; zero rows updated means a concurrent scan won, and the response is `ALREADY_USED`. Every scan (valid or not) is logged in `ticket_validations`.
 
 ## Authentication and RBAC
+
+> Full detail in [AUTH.md](AUTH.md).
 
 - Admin users and customers are separate principals with separate cookies.
 - Sessions are rows in `auth_sessions` (token stored as SHA-256); logout and privilege changes revoke immediately.

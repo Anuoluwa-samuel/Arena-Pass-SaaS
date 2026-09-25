@@ -1,5 +1,9 @@
 # Database
 
+> Every tenant-owned table carries `arena_id NOT NULL`, and children reference
+> their parent's `(arena_id, id)` so a cross-tenant row cannot be written. See
+> **`docs/MULTI_TENANCY.md`**.
+
 PostgreSQL 14+ (PGlite 17 locally). Schema lives in `server/db/schema.ts`; migrations in `server/db/migrations` are generated with `npm run db:generate` and applied automatically on boot (`server/db/index.ts`) or with `npm run db:migrate`.
 
 ## Entities

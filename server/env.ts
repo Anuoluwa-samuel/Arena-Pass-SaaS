@@ -10,6 +10,12 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_URL: z.string().url().default("http://localhost:4000"),
   APP_NAME: z.string().default("Arena Pass"),
+  /**
+   * The domain arena subdomains hang off: `{slug}.APP_ROOT_DOMAIN`. Defaults
+   * to the host of APP_URL, which keeps a single-arena deployment working
+   * without configuration.
+   */
+  APP_ROOT_DOMAIN: z.string().optional(),
 
   // Database: when DATABASE_URL is unset we run an embedded Postgres (PGlite).
   DATABASE_URL: z.string().optional(),
@@ -17,6 +23,12 @@ const schema = z.object({
 
   // Secrets — required outside development.
   SESSION_SECRET: z.string().min(32).optional(),
+  /**
+   * Encrypts credentials we store and must read back, such as each arena's
+   * payment provider keys. Separate from SESSION_SECRET so it can be rotated
+   * on its own schedule; falls back to it outside production.
+   */
+  CREDENTIALS_KEY: z.string().min(32).optional(),
   QR_SECRET: z.string().min(32).optional(),
   CRON_SECRET: z.string().min(16).optional(),
 

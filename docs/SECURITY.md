@@ -1,5 +1,12 @@
 # Security
 
+> Sign-in and session mechanics: [AUTH.md](AUTH.md). Money: [PAYMENTS.md](PAYMENTS.md).
+> Tenant isolation: [MULTI_TENANCY.md](MULTI_TENANCY.md). Threats: [THREAT_MODEL.md](THREAT_MODEL.md).
+
+This document lists the controls in the application and where each one stops.
+Tenant isolation is the subject of its own document because it is the property
+everything else in a multi-tenant system depends on.
+
 ## Controls
 
 | Area | Control |
@@ -29,3 +36,20 @@
 - Customer sign-up does not verify email ownership. Password reset and Google sign-in both prove it, which is why they revoke sessions and why linking Google clears an earlier password.
 - Consider a Content-Security-Policy header once third-party scripts are finalised.
 - Enable 2FA for SUPER_ADMIN accounts before handling live payments.
+
+## Multi-tenant controls
+
+| Area | Control |
+| --- | --- |
+| Tenant resolution | Hostname → verified custom domain or single-label subdomain; anything else resolves to nothing. A subdomain matching no arena never falls back to another arena. |
+| Authorisation | An ACTIVE `arena_memberships` row is the only thing that grants arena access. A platform role grants none. |
+| Service layer | Every tenant-facing service takes the arena explicitly; the arena is part of the `WHERE`. Cross-tenant reads answer *not found*, never *forbidden*. |
+| Database | `arena_id NOT NULL` on every tenant-owned table; 22 composite foreign keys on `(arena_id, id)` make a cross-tenant row unrepresentable. |
+| Impersonation | `platform.impersonate` only, with a written reason; read-only, one at a time, 30-minute expiry, audited, and shown in a banner throughout. |
+| Payments | Per-arena provider credentials, AES-256-GCM at rest, write-only through the API. No platform fallback past the first arena. |
+| Webhooks | Recorded by a fingerprint of their own bytes before anything else, so a replay is acknowledged without reprocessing; signature verified with that arena's key. |
+| Tickets | QR codes signed with a per-arena derived key; the scan log stores a redacted fragment, never a usable payload. |
+| Uploads | SVGs that can execute, embed or fetch are rejected rather than sanitised; every upload served with `default-src \'none\'; sandbox`. |
+| Content Security Policy | Per-request nonce, `strict-dynamic`, no `unsafe-inline` for scripts. |
+| Rate limiting | Keyed `(arena, identifier)` so one tenant cannot exhaust another's allowance. |
+| Caching | Every tenant surface renders on demand; cacheable endpoints declare `Vary: Host, X-Arena-Slug`; failures are `no-store`. |
