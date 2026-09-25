@@ -147,9 +147,26 @@ per theme and preserves the hue and chroma the operator actually chose; a unit
 test asserts the impossibility directly, so nobody later "simplifies" this back
 into one value.
 
-Only the two colour variables are overridden. Backgrounds, text, borders and
-the semantic colours stay on the platform palette, so a tenant cannot make
-their own site unreadable, and green keeps meaning "paid" everywhere.
+The colour reaches the whole page, not only the buttons: background, cards,
+borders, sidebar and the ambient gradient are rotated to the arena's hue, so a
+violet arena is a violet site rather than the platform with violet buttons.
+Only **hue** moves — every lightness and chroma stays as designed, which is
+what stops a tenant making their own site unreadable. The text tokens are
+re-checked against the retinted background afterwards and nudged if they slip
+under 4.5:1.
+
+The semantic colours are deliberately excluded. Success, warning, destructive
+and info keep their own hues, so green still means "paid" on an orange arena.
+
+Both `:root` and `.dark` must declare exactly the same tokens. The injected
+stylesheet comes after `globals.css` and the two selectors have equal
+specificity, so a token written only into `:root` overrides the dark value
+while dark mode is active — which once put light-mode ink on a near-black page
+at 1.01:1. A test asserts the two lists match.
+
+`lib/brand/theme.ts` holds a copy of the platform's token values so it can
+rotate them at runtime. A test parses `app/globals.css` and fails if any of
+them drifts, so the copy cannot silently fall out of date.
 
 The colours are validated as hex on the server before they are stored, so
 nothing a tenant types reaches a stylesheet as arbitrary text.
