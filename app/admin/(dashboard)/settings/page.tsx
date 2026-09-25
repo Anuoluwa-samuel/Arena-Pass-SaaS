@@ -1,17 +1,21 @@
 import { PageHeader } from "@/components/shared/page-header"
 import { SettingsForm } from "@/components/admin/settings-form"
+import { BrandingForm } from "@/components/admin/branding-form"
 import { requireArenaPermission } from "@/server/auth/rbac"
 import { getSettings } from "@/server/services/settings"
+import { getBranding } from "@/server/services/branding"
 
 export const metadata = { title: "System settings" }
 
 export default async function SettingsPage() {
   const { arena } = await requireArenaPermission("settings.view")
-  const settings = await getSettings(arena.arenaId)
+  const [settings, branding] = await Promise.all([getSettings(arena.arenaId), getBranding(arena.arenaId)])
+  const canManage = arena.permissions.includes("settings.manage")
   return (
     <div className="space-y-6">
       <PageHeader title="System settings" description="Defaults for new sessions, booking behaviour and site identity. Changes apply immediately." />
-      <SettingsForm initial={settings} canManage={arena.permissions.includes("settings.manage")} />
+      <BrandingForm initial={{ primaryColor: branding.primaryColor, accentColor: branding.accentColor }} canManage={canManage} />
+      <SettingsForm initial={settings} canManage={canManage} />
     </div>
   )
 }

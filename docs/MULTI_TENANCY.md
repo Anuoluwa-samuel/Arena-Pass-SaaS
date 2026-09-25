@@ -36,7 +36,7 @@ Platform
 `server/tenant/resolver.ts` turns a hostname into an arena:
 
 1. a **verified** custom domain (`arena_domains.status = 'VERIFIED'`);
-2. a single-label subdomain of the configured root (`lekki.arenapass.com`);
+2. a single-label subdomain of the configured root (`lekki.gameslots.com`);
 3. a development-only slug override, refused in production;
 4. the sole arena, *only* while the database holds exactly one.
 
@@ -46,7 +46,7 @@ hostname. A subdomain that matches no arena is a dead end — it does **not**
 fall through to rule 4, which would serve one arena on another's address.
 
 **The platform's own hostname.** The root domain and its `www` form
-(`arenapass.com`, or `localhost` in development) belong to no arena, because
+(`gameslots.com`, or `localhost` in development) belong to no arena, because
 they are where an operator arrives *before* they have one. At the root path
 they serve the platform's welcome and sign-up pages; every other path there is
 a 404, since `/sessions`, `/login`, a ticket and a checkout callback are all
@@ -127,6 +127,32 @@ sweeps, the public ticket link, and file serving by opaque storage key.
   code minted for one arena fails the signature check at another's gate before
   any lookup.
 - **Branding and email** come from the arena, not the platform.
+
+## Branding
+
+Each arena stores two colours on its own row (`brand_primary_color`,
+`brand_accent_color`) and sets them from **Settings → Your colours**: eight
+ready-made palettes, or any hex from a brand guide. An arena that sets neither
+inherits the platform's blue, which is a default rather than a gap.
+
+They apply to that arena's storefront **and** to its admin, so staff who work
+across two arenas can see at a glance which one they are in — worth having,
+given that switching arenas is two clicks.
+
+One stored hex is never what renders. Readable body text needs 4.5:1, which
+against the light page means a luminance at or below 0.13 and against the dark
+page one at or above 0.21 — ranges that do not overlap at any hue, so no single
+colour can serve both themes. `resolveBrandColour` therefore derives a lightness
+per theme and preserves the hue and chroma the operator actually chose; a unit
+test asserts the impossibility directly, so nobody later "simplifies" this back
+into one value.
+
+Only the two colour variables are overridden. Backgrounds, text, borders and
+the semantic colours stay on the platform palette, so a tenant cannot make
+their own site unreadable, and green keeps meaning "paid" everywhere.
+
+The colours are validated as hex on the server before they are stored, so
+nothing a tenant types reaches a stylesheet as arbitrary text.
 
 ## What a tenant cannot do
 

@@ -6,6 +6,8 @@ import { AdminHeader } from "@/components/admin/admin-header"
 import { getCurrentUser } from "@/server/auth/session"
 import { resolveAdminArena } from "@/server/tenant/admin-scope"
 import { ArenaAccessDenied } from "@/components/admin/arena-access-denied"
+import { ArenaTheme } from "@/components/site/arena-theme"
+import { getBranding } from "@/server/services/branding"
 import { ImpersonationBanner } from "@/components/admin/impersonation-banner"
 import { AppError } from "@/server/http/errors"
 import { getSettings } from "@/server/services/settings"
@@ -31,9 +33,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     }
     throw err
   }
-  const settings = await getSettings(arena.arenaId)
+  const [settings, branding] = await Promise.all([getSettings(arena.arenaId), getBranding(arena.arenaId)])
   return (
     <SidebarProvider>
+      {/* Staff who work across two arenas get a visible cue about which one
+          they are in — the same colour their customers see. */}
+      <ArenaTheme primaryColor={branding.primaryColor} accentColor={branding.accentColor} />
       <Suspense>
         <AdminSidebar permissions={arena.permissions} siteName={settings.siteName} />
       </Suspense>
