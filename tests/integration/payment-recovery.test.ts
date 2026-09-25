@@ -1,19 +1,22 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest"
 import { randomUUID } from "node:crypto"
-import { and, eq } from "drizzle-orm"
+import { and, desc, eq } from "drizzle-orm"
 import { schema } from "@/server/db"
 import { createTestDb } from "../helpers/db"
-import { customer, getAdminUser, makeOpenSession, testActor } from "../helpers/fixtures"
+import { getArena, customer, getAdminUser, makeOpenSession, testActor } from "../helpers/fixtures"
 import { createBooking } from "@/server/services/bookings"
 import { countPaymentsNeedingRefund, handleProviderWebhook, initializePayment, listPayments, reconcilePendingPayments, refundPayment, verifyPayment } from "@/server/services/payments"
 import { getSessionById } from "@/server/services/sessions"
 import { setMockOutcome } from "@/server/payments/mock"
-import { __setPaymentProviderForTests } from "@/server/payments"
+import { __setPaymentProviderForTests } from "@/server/payments/accounts"
 import type { PaymentProvider } from "@/server/payments/provider"
 
 let ctx: Awaited<ReturnType<typeof createTestDb>>
+/** Every service call in this file is scoped to the seeded arena. */
+let arena: Awaited<ReturnType<typeof getArena>>
 beforeAll(async () => {
   ctx = await createTestDb()
+  arena = await getArena(ctx.db)
 })
 afterAll(async () => {
   __setPaymentProviderForTests(undefined)
@@ -21,8 +24,8 @@ afterAll(async () => {
 })
 
 async function book(sessionId: string, i: number) {
-  const { booking } = await createBooking({ sessionId, customer: customer(i), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
-  const { payment } = await initializePayment(booking.id)
+  const { booking } = await createBooking(arena.id, { sessionId, customer: customer(i), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+  const { payment } = await initializePayment(arena.id, booking.id)
   return { booking, payment }
 }
 const notificationsFor = (paymentId: string) =>
@@ -35,15 +38,15 @@ describe("paid after the hold expired and the session filled up", () => {
 
     // The hold lapses while the customer is still on the payment page…
     await ctx.db.update(schema.bookings).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(schema.bookings.id, late.booking.id))
-    await getSessionById(session.id) // releases the expired hold
+    await getSessionById(arena.id, session.id) // releases the expired hold
     // …and someone else takes (and pays for) the only slot.
     const other = await book(session.id, 1001)
     await setMockOutcome(other.payment.reference, "success")
-    expect((await verifyPayment(other.payment.reference)).status).toBe("PAID")
+    expect((await verifyPayment(arena.id, other.payment.reference)).status).toBe("PAID")
 
     // Now the late payment succeeds. Callback page and webhook arrive together.
     await setMockOutcome(late.payment.reference, "success")
-    const [a, b] = await Promise.all([verifyPayment(late.payment.reference), verifyPayment(late.payment.reference)])
+    const [a, b] = await Promise.all([verifyPayment(arena.id, late.payment.reference), verifyPayment(arena.id, late.payment.reference)])
     expect(a.status).toBe("REFUND_REQUIRED")
     expect(b.status).toBe("REFUND_REQUIRED")
 
@@ -65,22 +68,22 @@ describe("paid after the hold expired and the session filled up", () => {
     expect(emails[0].body).toContain(payment.reference)
 
     // Revisiting the callback page or a webhook retry does not alert again.
-    expect((await verifyPayment(late.payment.reference)).status).toBe("REFUND_REQUIRED")
+    expect((await verifyPayment(arena.id, late.payment.reference)).status).toBe("REFUND_REQUIRED")
     expect(await notificationsFor(payment.id)).toHaveLength(alerts.length)
 
-    expect(await countPaymentsNeedingRefund()).toBe(1)
-    const needs = await listPayments({ status: "NEEDS_REFUND" })
+    expect(await countPaymentsNeedingRefund(arena.id)).toBe(1)
+    const needs = await listPayments(arena.id, { status: "NEEDS_REFUND" })
     expect(needs.items.map((r) => r.payment.id)).toEqual([payment.id])
 
-    const refunded = await refundPayment(payment.id, "Session full", { actor: { ...testActor, id: admin.id } })
+    const refunded = await refundPayment(arena.id, payment.id, "Session full", { actor: { ...testActor, id: admin.id } })
     expect(refunded.payment.status).toBe("REFUNDED")
     expect(refunded.ticket).toBeNull()
     const refunds = await ctx.db.query.transactions.findMany({ where: and(eq(schema.transactions.paymentId, payment.id), eq(schema.transactions.type, "REFUND")) })
     expect(refunds).toHaveLength(1)
     expect(refunds[0].amount).toBe(-payment.amount)
-    expect(await countPaymentsNeedingRefund()).toBe(0)
+    expect(await countPaymentsNeedingRefund(arena.id)).toBe(0)
     // The customer still sees why they were refunded, not "payment failed".
-    expect((await verifyPayment(late.payment.reference)).status).toBe("REFUND_REQUIRED")
+    expect((await verifyPayment(arena.id, late.payment.reference)).status).toBe("REFUND_REQUIRED")
     // The other customer's ticket is untouched.
     expect((await ctx.db.query.sessions.findFirst({ where: eq(schema.sessions.id, session.id) }))!.bookedCount).toBe(1)
   })
@@ -121,19 +124,87 @@ describe("reconciling stuck pending payments", () => {
 })
 
 describe("provider webhooks", () => {
-  it("acknowledges a validly signed event that has nothing to verify, and rejects a bad signature", async () => {
-    const stub = (event: Awaited<ReturnType<PaymentProvider["parseWebhook"]>>): PaymentProvider => ({
-      name: "stub",
-      initialize: async () => ({ authorizationUrl: "https://x" }),
-      verify: async () => ({ status: "pending", amount: 0, currency: "NGN" }),
-      parseWebhook: async () => event,
-      refund: async () => ({ status: "success" }),
-    })
-    __setPaymentProviderForTests(stub({ type: "refund.processed", raw: {} }))
-    await expect(handleProviderWebhook("{}", new Headers())).resolves.toBeNull()
+  const stub = (
+    event: Awaited<ReturnType<PaymentProvider["parseWebhook"]>>,
+    verify: Awaited<ReturnType<PaymentProvider["verify"]>> = { status: "pending", amount: 0, currency: "NGN" }
+  ): PaymentProvider => ({
+    name: "stub",
+    initialize: async () => ({ authorizationUrl: "https://x" }),
+    verify: async () => verify,
+    parseWebhook: async () => event,
+    refund: async () => ({ status: "success" }),
+  })
+
+  /** A delivery for a real payment, so the handler can find its arena. */
+  async function delivery(reference: string, nonce = randomUUID()) {
+    return JSON.stringify({ event: "charge.success", nonce, data: { reference } })
+  }
+
+  it("acknowledges a reference it does not recognise, without revealing anything", async () => {
+    // No signature check is even attempted: an unknown reference must not be
+    // usable to probe which arenas exist or which keys are configured.
+    await expect(handleProviderWebhook(await delivery("AP-NOSUCHREF"), new Headers())).resolves.toBeNull()
+    const [event] = await ctx.db.select().from(schema.paymentEvents).orderBy(desc(schema.paymentEvents.createdAt)).limit(1)
+    expect(event.outcome).toBe("unknown_reference")
+    expect(event.signatureValid).toBe(false)
+    expect(event.arenaId).toBeNull()
+  })
+
+  it("rejects a delivery whose signature does not verify against the arena's key", async () => {
+    const session = await makeOpenSession(ctx.db)
+    const { booking } = await createBooking(arena.id, { sessionId: session.id, customer: customer(700), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+    const { payment } = await initializePayment(arena.id, booking.id)
 
     __setPaymentProviderForTests(stub(null))
-    await expect(handleProviderWebhook("{}", new Headers())).rejects.toMatchObject({ code: "FORBIDDEN" })
+    await expect(handleProviderWebhook(await delivery(payment.reference), new Headers())).rejects.toMatchObject({ code: "FORBIDDEN" })
     __setPaymentProviderForTests(undefined)
+
+    const [event] = await ctx.db.select().from(schema.paymentEvents).orderBy(desc(schema.paymentEvents.createdAt)).limit(1)
+    expect(event.outcome).toBe("bad_signature")
+    expect(event.arenaId).toBe(arena.id)
+    expect(event.signatureValid).toBe(false)
+  })
+
+  it("acknowledges a signed event that carries nothing to verify", async () => {
+    const session = await makeOpenSession(ctx.db)
+    const { booking } = await createBooking(arena.id, { sessionId: session.id, customer: customer(701), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+    const { payment } = await initializePayment(arena.id, booking.id)
+
+    __setPaymentProviderForTests(stub({ type: "refund.processed", raw: {} }))
+    await expect(handleProviderWebhook(await delivery(payment.reference), new Headers())).resolves.toBeNull()
+    __setPaymentProviderForTests(undefined)
+
+    const [event] = await ctx.db.select().from(schema.paymentEvents).orderBy(desc(schema.paymentEvents.createdAt)).limit(1)
+    expect(event.outcome).toBe("accepted")
+    expect(event.eventType).toBe("refund.processed")
+    expect(event.signatureValid).toBe(true)
+  })
+
+  it("processes identical bytes exactly once, however many times they arrive", async () => {
+    const session = await makeOpenSession(ctx.db)
+    const { booking } = await createBooking(arena.id, { sessionId: session.id, customer: customer(702), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+    const { payment } = await initializePayment(arena.id, booking.id)
+    await setMockOutcome(payment.reference, "success")
+
+    const body = await delivery(payment.reference)
+    // The provider confirms the charge on its own API, as the real one does.
+    __setPaymentProviderForTests(
+      stub({ type: "charge.success", reference: payment.reference, raw: {} }, { status: "success", amount: payment.amount, currency: payment.currency, providerTransactionId: "stub-1" })
+    )
+    const first = await handleProviderWebhook(body, new Headers())
+    expect(first?.status).toBe("PAID")
+
+    // The same signed bytes again — a provider retry, or a captured request
+    // replayed by someone else. Acknowledged, not re-processed.
+    const before = await ctx.db.select().from(schema.paymentEvents)
+    expect(await handleProviderWebhook(body, new Headers())).toBeNull()
+    expect(await handleProviderWebhook(body, new Headers())).toBeNull()
+    const after = await ctx.db.select().from(schema.paymentEvents)
+    expect(after.length).toBe(before.length)
+    __setPaymentProviderForTests(undefined)
+
+    // Exactly one ticket, whatever the delivery count.
+    const tickets = await ctx.db.select().from(schema.tickets).where(eq(schema.tickets.bookingId, booking.id))
+    expect(tickets).toHaveLength(1)
   })
 })

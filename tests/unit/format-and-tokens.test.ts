@@ -25,11 +25,18 @@ describe("passwords", () => {
 
 describe("QR payloads", () => {
   it("round-trips a signed payload and rejects tampering", () => {
-    const payload = buildQrPayload("abc123token")
-    expect(parseQrPayload(payload)).toEqual({ qrToken: "abc123token" })
-    expect(parseQrPayload(payload.replace("abc123", "abc124"))).toBeNull()
-    expect(parseQrPayload("AP1.abc123token.wrongsig")).toBeNull()
-    expect(parseQrPayload("nonsense")).toBeNull()
+    const arena = "11111111-1111-1111-1111-111111111111"
+    const other = "22222222-2222-2222-2222-222222222222"
+    const payload = buildQrPayload(arena, "abc123token")
+    expect(parseQrPayload(arena, payload)).toEqual({ qrToken: "abc123token" })
+    expect(parseQrPayload(arena, payload.replace("abc123", "abc124"))).toBeNull()
+    expect(parseQrPayload(arena, "AP1.abc123token.wrongsig")).toBeNull()
+    expect(parseQrPayload(arena, "nonsense")).toBeNull()
+
+    // Each arena signs with its own derived key, so a code minted for one
+    // fails at another's gate before any lookup happens.
+    expect(parseQrPayload(other, payload)).toBeNull()
+    expect(buildQrPayload(other, "abc123token")).not.toBe(payload)
   })
 })
 

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { eq } from "drizzle-orm"
 import { schema } from "@/server/db"
 import { createTestDb } from "../helpers/db"
+import { getArena } from "../helpers/fixtures"
 import { hashPassword, verifyPassword } from "@/server/auth/password"
 import { requestPasswordReset, resetPassword } from "@/server/auth/password-reset"
 import { createAuthSession } from "@/server/auth/session"
@@ -9,9 +10,12 @@ import { sha256 } from "@/server/auth/tokens"
 import { getEmailChannel, type EmailMessage } from "@/server/notifications/email"
 
 let ctx: Awaited<ReturnType<typeof createTestDb>>
+/** Customer identity is per arena; these all act on the seeded one. */
+let arena: Awaited<ReturnType<typeof getArena>>
 const sent: EmailMessage[] = []
 beforeAll(async () => {
   ctx = await createTestDb()
+  arena = await getArena(ctx.db)
   vi.spyOn(getEmailChannel(), "send").mockImplementation(async (msg) => {
     sent.push(msg)
     return {}
@@ -26,14 +30,14 @@ const meta = { ip: "127.0.0.1", userAgent: "vitest" }
 async function makeCustomer(email: string, overrides: Partial<typeof schema.customers.$inferInsert> = {}) {
   const [row] = await ctx.db
     .insert(schema.customers)
-    .values({ name: "Reset Tester", email, passwordHash: await hashPassword("old-password-123"), ...overrides })
+    .values({ arenaId: arena.id, name: "Reset Tester", email, passwordHash: await hashPassword("old-password-123"), ...overrides })
     .returning()
   return row
 }
 
 /** Runs the deferred delivery and returns the raw token from the emailed link. */
 async function requestToken(email: string) {
-  const deliver = await requestPasswordReset(email, meta)
+  const deliver = await requestPasswordReset(arena.id, email, meta)
   if (!deliver) return null
   const before = sent.length
   await deliver()
@@ -45,13 +49,13 @@ async function requestToken(email: string) {
 describe("password reset", () => {
   it("does nothing for an unknown email", async () => {
     const before = sent.length
-    expect(await requestPasswordReset("nobody@example.com", meta)).toBeNull()
+    expect(await requestPasswordReset(arena.id, "nobody@example.com", meta)).toBeNull()
     expect(sent.length).toBe(before)
   })
 
   it("does nothing for a deactivated account", async () => {
     await makeCustomer("disabled@example.com", { isActive: false })
-    expect(await requestPasswordReset("disabled@example.com", meta)).toBeNull()
+    expect(await requestPasswordReset(arena.id, "disabled@example.com", meta)).toBeNull()
   })
 
   it("emails a link and stores only the token's hash", async () => {

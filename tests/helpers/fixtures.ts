@@ -6,6 +6,28 @@ import type { AuditActor } from "@/server/services/audit"
 
 export const testActor: AuditActor & { id: string } = { type: "user", id: randomUUID(), name: "Test Admin" }
 
+/**
+ * A second tenant, shaped the way registration shapes one: an organization, an
+ * arena, and an owner. Without the owner the arena would be unreachable, which
+ * is a state the product never produces and the invariant suite rejects.
+ */
+export async function makeArena(db: Database, slug: string, overrides: Partial<typeof schema.arenas.$inferInsert> = {}) {
+  const [organization] = await db.insert(schema.organizations).values({ slug, name: slug, status: "ACTIVE" }).returning()
+  const [arena] = await db
+    .insert(schema.arenas)
+    .values({ slug, name: slug, organizationId: organization.id, status: "ACTIVE", onboardingStep: "launched", ...overrides })
+    .returning()
+  const ownerRole = (await db.query.roles.findFirst({ where: eq(schema.roles.key, "ARENA_OWNER") }))!
+  const [owner] = await db
+    .insert(schema.users)
+    .values({ name: `${slug} owner`, email: `owner@${slug}.fixture`, passwordHash: "x" })
+    .returning()
+  await db
+    .insert(schema.arenaMemberships)
+    .values({ arenaId: arena.id, userId: owner.id, roleId: ownerRole.id, status: "ACTIVE", acceptedAt: new Date() })
+  return arena
+}
+
 export async function getArena(db: Database) {
   return (await db.query.arenas.findFirst({ where: eq(schema.arenas.slug, "main") }))!
 }

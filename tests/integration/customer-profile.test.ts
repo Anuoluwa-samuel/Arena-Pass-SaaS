@@ -2,21 +2,25 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest"
 import { eq } from "drizzle-orm"
 import { schema } from "@/server/db"
 import { createTestDb } from "../helpers/db"
+import { getArena } from "../helpers/fixtures"
 import { hashPassword, verifyPassword } from "@/server/auth/password"
 import { createAuthSession } from "@/server/auth/session"
 import { changeCustomerPassword, getCustomerProfile, updateCustomerProfile } from "@/server/services/profile"
 import { profileSchema } from "@/lib/validation/profile"
 
 let ctx: Awaited<ReturnType<typeof createTestDb>>
+/** Customer identity is per arena; these all act on the seeded one. */
+let arena: Awaited<ReturnType<typeof getArena>>
 beforeAll(async () => {
   ctx = await createTestDb()
+  arena = await getArena(ctx.db)
 })
 afterAll(async () => {
   await ctx.client.close()
 })
 
 async function makeCustomer(email: string, password: string | null = "OldPassword123") {
-  const [row] = await ctx.db.insert(schema.customers).values({ name: "Profile Tester", email, passwordHash: password ? await hashPassword(password) : null }).returning()
+  const [row] = await ctx.db.insert(schema.customers).values({ arenaId: arena.id, name: "Profile Tester", email, passwordHash: password ? await hashPassword(password) : null }).returning()
   return row
 }
 const save = (id: string, input: Record<string, unknown>) => updateCustomerProfile(id, profileSchema.parse({ name: "Profile Tester", ...input }))
