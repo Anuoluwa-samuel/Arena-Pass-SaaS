@@ -24,3 +24,6 @@ test-results/
 # OS / editor
 .DS_Store
 .vercel/
+
+# Local screenshots from scripts/dev/screenshot.mjs
+.shots/

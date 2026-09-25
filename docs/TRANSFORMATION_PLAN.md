@@ -1,7 +1,7 @@
 # Arena Pass — Multi-Tenant SaaS Transformation Plan
 
 Date: 2026-09-24
-Working copy: `~/Desktop/arena-pass-saas` (copied from `~/Downloads/play-pass-e-ticketing-ui` at `a431683`; the original is untouched and remains the fallback).
+This repository began as a copy of the single-arena Arena Pass application at commit `a431683`, and was transformed into the multi-tenant platform described below. It stands on its own; the original project is unaffected.
 
 This document is the output of **Phase 1 (audit + target design)**. It records what the
 existing system actually does, where the tenant boundary leaks today, and the ordered

@@ -1,6 +1,8 @@
 import { chromium } from "@playwright/test"
 const [,, ...args] = process.argv
-const out = process.env.SHOT_DIR ?? "/private/tmp/claude-501/-Users-mac-Downloads-play-pass-e-ticketing-ui/8c4039de-d0aa-4945-9560-279d4a745a54/scratchpad/shots"
+// Defaults inside the repo (gitignored) so this works on any machine; set
+// SHOT_DIR to put the images somewhere else.
+const out = process.env.SHOT_DIR ?? ".shots"
 // --light / --dark drive `prefers-color-scheme` so the default "system" theme resolves.
 const scheme = args.includes("--dark") ? "dark" : args.includes("--light") ? "light" : undefined
 const browser = await chromium.launch()
