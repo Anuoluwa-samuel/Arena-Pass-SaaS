@@ -29,6 +29,83 @@
       "when": 1789617084458,
       "tag": "0003_lumpy_black_bolt",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790236306560,
+      "tag": "0004_multitenancy",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790236404912,
+      "tag": "0005_tenancy_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790253334619,
+      "tag": "0006_platform_role_catalogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790255596252,
+      "tag": "0007_customers_per_arena",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790255884974,
+      "tag": "0008_backfill_grid_arena",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790271108991,
+      "tag": "0009_tenant_constraints",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790273573366,
+      "tag": "0010_email_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790273797169,
+      "tag": "0011_drop_legacy_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790275000445,
+      "tag": "0012_payment_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790275751074,
+      "tag": "0013_scan_log_detail",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790294094419,
+      "tag": "0014_platform_billing",
+      "breakpoints": true
     }
   ]
 }

@@ -58,15 +58,106 @@ export type TicketType = (typeof TICKET_TYPE)[number]
 export const TRANSACTION_TYPE = ["CHARGE", "REFUND"] as const
 export type TransactionType = (typeof TRANSACTION_TYPE)[number]
 
-export const ROLE_KEYS = [
-  "SUPER_ADMIN",
-  "ADMIN",
-  "MANAGER",
-  "FINANCE",
-  "STAFF",
-  "TICKET_AGENT",
-] as const
+/**
+ * Roles come in two scopes. A PLATFORM role governs the Arena Pass platform
+ * itself and is held through `users.platform_role_id`; an ARENA role governs
+ * one tenant and is held through an `arena_memberships` row. A role is never
+ * both, so a platform operator cannot silently inherit tenant access and a
+ * tenant role cannot reach platform surfaces.
+ */
+export const PLATFORM_ROLE_KEYS = ["PLATFORM_OWNER", "PLATFORM_ADMIN", "PLATFORM_SUPPORT"] as const
+export type PlatformRoleKey = (typeof PLATFORM_ROLE_KEYS)[number]
+
+export const ARENA_ROLE_KEYS = ["ARENA_OWNER", "ARENA_ADMIN", "MANAGER", "FINANCE", "TICKET_AGENT", "STAFF"] as const
+export type ArenaRoleKey = (typeof ARENA_ROLE_KEYS)[number]
+
+export const ROLE_KEYS = [...PLATFORM_ROLE_KEYS, ...ARENA_ROLE_KEYS] as const
 export type RoleKey = (typeof ROLE_KEYS)[number]
+
+export const ROLE_SCOPES = ["PLATFORM", "ARENA"] as const
+export type RoleScope = (typeof ROLE_SCOPES)[number]
+
+export function roleScopeOf(key: RoleKey): RoleScope {
+  return (PLATFORM_ROLE_KEYS as readonly string[]).includes(key) ? "PLATFORM" : "ARENA"
+}
+
+export function isPlatformRole(key: string): key is PlatformRoleKey {
+  return (PLATFORM_ROLE_KEYS as readonly string[]).includes(key)
+}
+
+export function isArenaRole(key: string): key is ArenaRoleKey {
+  return (ARENA_ROLE_KEYS as readonly string[]).includes(key)
+}
+
+/**
+ * Pre-multi-tenancy role keys and what they become. The 0005 data migration
+ * renames the rows; this map is also what `ensureBaseline` uses so a database
+ * that predates the migration converges on the same vocabulary.
+ */
+export const LEGACY_ROLE_KEY_MAP: Record<string, RoleKey> = {
+  SUPER_ADMIN: "PLATFORM_OWNER",
+  ADMIN: "ARENA_ADMIN",
+}
+
+/** Membership lifecycle. Only ACTIVE grants access. */
+export const MEMBERSHIP_STATUS = ["INVITED", "ACTIVE", "SUSPENDED", "REMOVED"] as const
+export type MembershipStatus = (typeof MEMBERSHIP_STATUS)[number]
+
+/** An arena is only reachable by customers when ACTIVE. */
+export const ARENA_STATUS = ["PENDING_SETUP", "ACTIVE", "SUSPENDED", "ARCHIVED"] as const
+export type ArenaStatus = (typeof ARENA_STATUS)[number]
+
+export const ORGANIZATION_STATUS = ["PENDING_SETUP", "ACTIVE", "SUSPENDED", "ARCHIVED"] as const
+export type OrganizationStatus = (typeof ORGANIZATION_STATUS)[number]
+
+/** A hostname only resolves to its arena once VERIFIED. */
+export const DOMAIN_STATUS = ["PENDING", "VERIFIED", "FAILED", "DISABLED"] as const
+export type DomainStatus = (typeof DOMAIN_STATUS)[number]
+
+export const PAYMENT_ACCOUNT_STATUS = ["PENDING", "ACTIVE", "DISABLED"] as const
+export type PaymentAccountStatus = (typeof PAYMENT_ACCOUNT_STATUS)[number]
+
+/**
+ * The SaaS subscription an organization holds with Arena Pass.
+ *
+ * Deliberately a separate vocabulary from `PAYMENT_STATUS`: an arena's
+ * customers paying for football and an arena paying for Arena Pass are
+ * different financial domains that must never share a code path.
+ */
+export const SUBSCRIPTION_STATUS = ["TRIALING", "ACTIVE", "PAST_DUE", "CANCELLED", "EXPIRED"] as const
+export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUS)[number]
+
+export const BILLING_INTERVAL = ["MONTHLY", "YEARLY"] as const
+export type BillingInterval = (typeof BILLING_INTERVAL)[number]
+
+/** What an organization is billed on. */
+export const USAGE_METRIC = ["ARENAS", "SESSIONS", "TICKETS", "STAFF"] as const
+export type UsageMetric = (typeof USAGE_METRIC)[number]
+
+/**
+ * Capabilities that can be turned on per arena. Checked on the server for
+ * anything that matters — hiding a button is not a feature gate.
+ */
+export const FEATURE_FLAGS = [
+  "custom_domains",
+  "multiple_locations",
+  "advanced_analytics",
+  "waitlists",
+  "team_management",
+] as const
+export type FeatureFlag = (typeof FEATURE_FLAGS)[number]
+
+/** Resumable onboarding. The arena stays PENDING_SETUP until `launched`. */
+export const ONBOARDING_STEPS = [
+  "organization",
+  "arena",
+  "branding",
+  "payments",
+  "first_session",
+  "staff",
+  "launched",
+] as const
+export type OnboardingStep = (typeof ONBOARDING_STEPS)[number]
 
 /**
  * Permission vocabulary. Route handlers call requirePermission(...) with one
@@ -90,21 +181,67 @@ export const PERMISSIONS = [
   "cms.manage",
   "media.view",
   "media.manage",
-  "users.view",
-  "users.manage",
-  "roles.manage",
   "notifications.view",
   "notifications.manage",
   "settings.view",
   "settings.manage",
   "audit.view",
-  "arenas.manage",
+  // Staff management inside one arena.
+  "staff.view",
+  "staff.invite",
+  "staff.update",
+  "staff.remove",
+  // Platform surfaces. These are only ever granted to a PLATFORM role and are
+  // never checked against an arena membership.
+  "platform.overview.view",
+  "platform.organizations.view",
+  "platform.organizations.manage",
+  "platform.arenas.view",
+  "platform.arenas.manage",
+  "platform.users.view",
+  "platform.users.manage",
+  "platform.subscriptions.view",
+  "platform.subscriptions.manage",
+  "platform.audit.view",
+  "platform.impersonate",
+  "platform.settings.manage",
+  /**
+   * Roles are a platform-wide catalogue shared by every arena, so editing one
+   * changes what MANAGER means everywhere. That can never be an arena
+   * permission: an arena owner would be able to widen their own staff's access
+   * inside every other tenant.
+   */
+  "platform.roles.manage",
 ] as const
 export type Permission = (typeof PERMISSIONS)[number]
 
+/** Permissions that only make sense at platform level. */
+export const PLATFORM_PERMISSIONS = PERMISSIONS.filter((p) => p.startsWith("platform.")) as readonly Permission[]
+
+/** Permissions that are always evaluated against a specific arena. */
+export const ARENA_PERMISSIONS = PERMISSIONS.filter((p) => !p.startsWith("platform.")) as readonly Permission[]
+
+export function isPlatformPermission(permission: Permission) {
+  return permission.startsWith("platform.")
+}
+
+const ARENA_ADMIN_PERMISSIONS = ARENA_PERMISSIONS.filter((p) => p !== "settings.manage")
+
 export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, readonly Permission[]> = {
-  SUPER_ADMIN: PERMISSIONS,
-  ADMIN: PERMISSIONS.filter((p) => p !== "roles.manage" && p !== "arenas.manage"),
+  // Platform roles ------------------------------------------------------
+  PLATFORM_OWNER: PERMISSIONS,
+  PLATFORM_ADMIN: PLATFORM_PERMISSIONS.filter((p) => p !== "platform.settings.manage"),
+  PLATFORM_SUPPORT: [
+    "platform.overview.view",
+    "platform.organizations.view",
+    "platform.arenas.view",
+    "platform.users.view",
+    "platform.subscriptions.view",
+    "platform.audit.view",
+  ],
+  // Arena roles ---------------------------------------------------------
+  ARENA_OWNER: ARENA_PERMISSIONS,
+  ARENA_ADMIN: ARENA_ADMIN_PERMISSIONS,
   MANAGER: [
     "dashboard.view",
     "sessions.view",
@@ -118,6 +255,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, readonly Permission[]> = 
     "analytics.view",
     "notifications.view",
     "audit.view",
+    "staff.view",
   ],
   FINANCE: [
     "dashboard.view",
@@ -140,12 +278,15 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, readonly Permission[]> = 
 }
 
 export const ROLE_LABELS: Record<RoleKey, string> = {
-  SUPER_ADMIN: "Super Admin",
-  ADMIN: "Administrator",
+  PLATFORM_OWNER: "Platform Owner",
+  PLATFORM_ADMIN: "Platform Admin",
+  PLATFORM_SUPPORT: "Platform Support",
+  ARENA_OWNER: "Arena Owner",
+  ARENA_ADMIN: "Arena Administrator",
   MANAGER: "Manager",
   FINANCE: "Finance",
-  STAFF: "Staff",
   TICKET_AGENT: "Ticket Agent",
+  STAFF: "Staff",
 }
 
 export const NOTIFICATION_CHANNEL = ["EMAIL", "SMS", "IN_APP", "PUSH"] as const
@@ -182,6 +323,9 @@ export const ERROR_CODES = [
   "PAYMENT_PROVIDER_ERROR",
   "UNAUTHORIZED",
   "FORBIDDEN",
+  "ARENA_NOT_FOUND",
+  "ARENA_UNAVAILABLE",
+  "ARENA_SELECTION_REQUIRED",
   "VALIDATION_ERROR",
   "NOT_FOUND",
   "CONFLICT",
