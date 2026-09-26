@@ -1,5 +1,15 @@
 # Billing
 
+> **Subscription billing is not built.** The tables below exist and are never
+> read or written: no plan is seeded, no organization has a subscription,
+> nothing is charged and no plan limit is enforced. Everything in the
+> *Subscriptions* and *Feature flags* sections describes the schema, not
+> working behaviour — except feature flags, which are wired.
+> [BILLING_PLAN.md](BILLING_PLAN.md) sets out what it would take.
+>
+> Customer payments — an arena's customers paying that arena — are fully built
+> and in production use. That is the first column below.
+
 Two financial domains live in this system. They must never be confused.
 
 | | An arena's customers → the arena | An organization → Game Slots |
@@ -53,8 +63,12 @@ feature gate.
 
 ## Not built yet
 
-Subscription *charging* is schema and service only: no provider integration,
-no dunning, no invoices, and no enforcement of plan limits at the point of use.
-The separation exists so that work lands in its own domain rather than being
-bolted onto booking payments. See "Recommended future improvements" in
-`docs/TRANSFORMATION_PLAN.md`.
+To be exact about the gap: there is no billing service, no API route, no
+screen, and the `plans` table is never populated. The only code outside the
+schema that mentions subscriptions is the status list in
+`lib/domain/constants.ts`.
+
+The separation was built first on purpose — customer payments and platform
+subscriptions share no table, no status vocabulary and no code path — because
+that is the expensive thing to retrofit. The charging goes on top.
+[BILLING_PLAN.md](BILLING_PLAN.md) is the plan for it.

@@ -79,7 +79,8 @@ else follows from.
 - [docs/API.md](docs/API.md) — endpoints, envelope, error codes
 - [docs/AUTH.md](docs/AUTH.md) — principals, sessions, passwords, tokens, Google sign-in
 - [docs/PAYMENTS.md](docs/PAYMENTS.md) — per-arena provider accounts, the payment state machine, webhooks
-- [docs/BILLING.md](docs/BILLING.md) — plans, subscriptions, usage, feature flags
+- [docs/BILLING.md](docs/BILLING.md) — plans, subscriptions, usage, feature flags (subscriptions not built)
+- [docs/BILLING_PLAN.md](docs/BILLING_PLAN.md) — what it would take to charge organizations
 - [docs/SECURITY.md](docs/SECURITY.md) — controls and their limits
 - [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) — assets, actors, threats, residual risks
 - [docs/OPERATIONS.md](docs/OPERATIONS.md) — migrations, backups, monitoring, incident response
