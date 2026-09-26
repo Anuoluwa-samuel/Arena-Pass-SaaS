@@ -84,7 +84,13 @@ export interface CreatedBooking {
 export async function createBooking(
   arenaId: string,
   input: CreateBookingInput,
-  ctx: { actor: AuditActor; createdByUserId?: string | null }
+  /**
+   * `customerId` is the signed-in account, resolved by the route from the
+   * session cookie. It is a parameter rather than part of `input` so that it
+   * cannot arrive from a request body: booking as somebody else must not be
+   * expressible, not merely rejected.
+   */
+  ctx: { actor: AuditActor; customerId: string; createdByUserId?: string | null }
 ): Promise<CreatedBooking> {
   const scope = forArena(arenaId)
   const database = await db()
@@ -96,7 +102,9 @@ export async function createBooking(
   })
   if (existing) return hydrate(existing, true)
 
-  const customer = await upsertCustomerByEmail(scope.arenaId, input.customer)
+  // The account is looked up inside this arena. A customer id from another
+  // arena is not found here, so a stolen or guessed id books nothing.
+  const customer = await scope.require(schema.customers, ctx.customerId, "Account")
   const now = new Date()
 
   try {

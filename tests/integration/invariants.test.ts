@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest"
 import { randomUUID } from "node:crypto"
 import { sql } from "drizzle-orm"
 import { createTestDb } from "../helpers/db"
-import { getArena, getAdminUser, makeArena, customer, testActor } from "../helpers/fixtures"
+import { getArena, getAdminUser, makeArena, customer, testActor , bookAs} from "../helpers/fixtures"
 import { createSession } from "@/server/services/sessions"
 import { createBooking } from "@/server/services/bookings"
 import { initializePayment, verifyPayment } from "@/server/services/payments"
@@ -47,7 +47,7 @@ beforeAll(async () => {
   const [sessionA, sessionB] = await Promise.all([openSession(a.id, "A session"), openSession(b.id, "B session")])
 
   const buy = async (arenaId: string, sessionId: string, i: number) => {
-    const { booking } = await createBooking(arenaId, { sessionId, customer: customer(i), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+    const { booking } = await bookAs(arenaId, i, { sessionId })
     const { payment } = await initializePayment(arenaId, booking.id)
     await setMockOutcome(payment.reference, "success")
     return verifyPayment(arenaId, payment.reference)
@@ -263,11 +263,7 @@ describe("two arenas selling at the same moment", () => {
     // contention may consume the other's inventory.
     const attempts = Array.from({ length: 80 }, (_, i) => {
       const toA = i % 2 === 0
-      return createBooking(
-        toA ? a.id : b.id,
-        { sessionId: toA ? sessionA.id : sessionB.id, customer: customer(500 + i), idempotencyKey: randomUUID() },
-        { actor: { type: "customer" } }
-      )
+      return bookAs(toA ? a.id : b.id, 500 + i, { sessionId: toA ? sessionA.id : sessionB.id })
     })
     const results = await Promise.allSettled(attempts)
     const held = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<Awaited<ReturnType<typeof createBooking>>>[]

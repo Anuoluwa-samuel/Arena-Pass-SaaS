@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto"
 import { eq } from "drizzle-orm"
 import { schema } from "@/server/db"
 import { createTestDb } from "../helpers/db"
-import { getArena, customer, getAdminUser, makeOpenSession, testActor } from "../helpers/fixtures"
+import { getArena, customer, getAdminUser, makeOpenSession, testActor , bookAs, customerAccount, makeArena} from "../helpers/fixtures"
 import { createBooking, expireStaleBookings } from "@/server/services/bookings"
+import { createBookingSchema } from "@/lib/validation/bookings"
 import { initializePayment, verifyPayment, refundPayment } from "@/server/services/payments"
 import { setMockOutcome } from "@/server/payments/mock"
 import { buildQrPayload, validateTicket } from "@/server/services/tickets"
@@ -22,15 +23,60 @@ afterAll(async () => {
 })
 
 async function bookAndPay(sessionId: string, i: number) {
-  const { booking } = await createBooking(arena.id, { sessionId, customer: customer(i), idempotencyKey: randomUUID() },
-    { actor: { type: "customer" } }
-  )
+  const { booking } = await bookAs(arena.id, i, { sessionId })
   const { payment } = await initializePayment(arena.id, booking.id)
   await setMockOutcome(payment.reference, "success")
   const outcome = await verifyPayment(arena.id, payment.reference)
   if (outcome.status !== "PAID") throw new Error(`expected PAID, got ${outcome.status}`)
   return { booking, payment, ticket: outcome.ticket }
 }
+
+describe("booking requires an account", () => {
+  /**
+   * The identity of the person booking comes from their session and nowhere
+   * else. Before this, the endpoint took a name and email in the body — so
+   * anyone could reserve a slot, and have a ticket issued, in an address they
+   * had never proved they owned.
+   */
+  it("has no way to name a customer in the request", () => {
+    // Not "rejects an identity in the body" — the schema has no field for one,
+    // so booking as somebody else is inexpressible rather than merely refused.
+    const parsed = createBookingSchema.safeParse({
+      sessionId: "00000000-0000-4000-8000-000000000000",
+      idempotencyKey: "abcdefghijkl",
+      customer: { name: "Someone Else", email: "victim@example.com" },
+    })
+    expect(parsed.success).toBe(true)
+    expect(parsed.success && "customer" in parsed.data).toBe(false)
+  })
+
+  it("books against the account it was given, whatever the session says", async () => {
+    const session = await makeOpenSession(ctx.db)
+    const account = await customerAccount(arena.id, 950)
+    const { booking, customer: booked } = await createBooking(
+      arena.id,
+      { sessionId: session.id, idempotencyKey: randomUUID() },
+      { actor: { type: "customer", id: account.id, name: account.name }, customerId: account.id }
+    )
+    expect(booked.id).toBe(account.id)
+    expect(booking.customerId).toBe(account.id)
+  })
+
+  it("refuses an account from another arena", async () => {
+    // Customers are per arena. An id that exists elsewhere is not found here,
+    // so a stolen or guessed id books nothing.
+    const other = await makeArena(ctx.db, "booking-other")
+    const stranger = await customerAccount(other.id, 951)
+    const session = await makeOpenSession(ctx.db)
+    await expect(
+      createBooking(
+        arena.id,
+        { sessionId: session.id, idempotencyKey: randomUUID() },
+        { actor: { type: "customer", id: stranger.id, name: stranger.name }, customerId: stranger.id }
+      )
+    ).rejects.toMatchObject({ code: "NOT_FOUND" })
+  })
+})
 
 describe("session capacity: 8 teams × 4 players = 32", () => {
   it("creates exactly 8 teams and 32 slots for a default session", async () => {
@@ -46,7 +92,7 @@ describe("session capacity: 8 teams × 4 players = 32", () => {
   it("never allocates more than 32 slots when 100 customers book simultaneously", async () => {
     const session = await makeOpenSession(ctx.db)
     const attempts = Array.from({ length: 100 }, (_, i) =>
-      createBooking(arena.id, { sessionId: session.id, customer: customer(100 + i), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+      bookAs(arena.id, 100 + i, { sessionId: session.id })
     )
     const results = await Promise.allSettled(attempts)
     const ok = results.filter((r) => r.status === "fulfilled")
@@ -74,12 +120,12 @@ describe("session capacity: 8 teams × 4 players = 32", () => {
     const session = await makeOpenSession(ctx.db)
     const first = []
     for (let i = 0; i < 8; i++) {
-      const r = await createBooking(arena.id, { sessionId: session.id, customer: customer(200 + i), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+      const r = await bookAs(arena.id, 200 + i, { sessionId: session.id })
       first.push(r.slot)
     }
     expect(first.map((s) => s.teamNumber)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
     expect(first.every((s) => s.slotNumber === 1)).toBe(true)
-    const preferred = await createBooking(arena.id, { sessionId: session.id, customer: customer(299), idempotencyKey: randomUUID(), preferredTeamNumber: 3 }, { actor: { type: "customer" } })
+    const preferred = await bookAs(arena.id, 299, { sessionId: session.id, preferredTeamNumber: 3 })
     expect(preferred.slot).toEqual({ teamNumber: 3, slotNumber: 2 })
   })
 
@@ -87,7 +133,7 @@ describe("session capacity: 8 teams × 4 players = 32", () => {
     const session = await makeOpenSession(ctx.db, { teamsCount: 5, playersPerTeam: 3 })
     expect(session.totalCapacity).toBe(15)
     const results = await Promise.allSettled(
-      Array.from({ length: 20 }, (_, i) => createBooking(arena.id, { sessionId: session.id, customer: customer(300 + i), idempotencyKey: randomUUID() }, { actor: { type: "customer" } }))
+      Array.from({ length: 20 }, (_, i) => bookAs(arena.id, 300 + i, { sessionId: session.id }))
     )
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(15)
   })
@@ -97,8 +143,8 @@ describe("booking idempotency and hold expiry", () => {
   it("returns the same booking for a repeated idempotency key", async () => {
     const session = await makeOpenSession(ctx.db)
     const key = randomUUID()
-    const a = await createBooking(arena.id, { sessionId: session.id, customer: customer(400), idempotencyKey: key }, { actor: { type: "customer" } })
-    const b = await createBooking(arena.id, { sessionId: session.id, customer: customer(400), idempotencyKey: key }, { actor: { type: "customer" } })
+    const a = await bookAs(arena.id, 400, { sessionId: session.id, idempotencyKey: key })
+    const b = await bookAs(arena.id, 400, { sessionId: session.id, idempotencyKey: key })
     expect(b.booking.id).toBe(a.booking.id)
     expect(b.reused).toBe(true)
     const fresh = (await ctx.db.query.sessions.findFirst({ where: eq(schema.sessions.id, session.id) }))!
@@ -107,9 +153,9 @@ describe("booking idempotency and hold expiry", () => {
 
   it("releases expired holds so the slot can be re-booked", async () => {
     const session = await makeOpenSession(ctx.db, { teamsCount: 1, playersPerTeam: 1 })
-    const first = await createBooking(arena.id, { sessionId: session.id, customer: customer(500), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+    const first = await bookAs(arena.id, 500, { sessionId: session.id })
     await expect(
-      createBooking(arena.id, { sessionId: session.id, customer: customer(501), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+      bookAs(arena.id, 501, { sessionId: session.id })
     ).rejects.toMatchObject({ code: "SESSION_FULL" })
 
     // Simulate the hold timing out.
@@ -117,7 +163,7 @@ describe("booking idempotency and hold expiry", () => {
     const { released } = await expireStaleBookings()
     expect(released).toBe(1)
 
-    const second = await createBooking(arena.id, { sessionId: session.id, customer: customer(501), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+    const second = await bookAs(arena.id, 501, { sessionId: session.id })
     expect(second.slot).toEqual({ teamNumber: 1, slotNumber: 1 })
     const expired = (await ctx.db.query.bookings.findFirst({ where: eq(schema.bookings.id, first.booking.id) }))!
     expect(expired.status).toBe("EXPIRED")
@@ -125,11 +171,11 @@ describe("booking idempotency and hold expiry", () => {
 
   it("rejects bookings outside the window and for drafts", async () => {
     const closed = await makeOpenSession(ctx.db, { bookingOpensAt: new Date(Date.now() - 7_200_000), bookingDeadline: new Date(Date.now() - 3_600_000) })
-    await expect(createBooking(arena.id, { sessionId: closed.id, customer: customer(600), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })).rejects.toMatchObject({ code: "BOOKING_CLOSED" })
+    await expect(bookAs(arena.id, 600, { sessionId: closed.id })).rejects.toMatchObject({ code: "BOOKING_CLOSED" })
     const notYet = await makeOpenSession(ctx.db, { bookingOpensAt: new Date(Date.now() + 3_600_000), bookingDeadline: new Date(Date.now() + 5 * 3_600_000) })
-    await expect(createBooking(arena.id, { sessionId: notYet.id, customer: customer(601), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })).rejects.toMatchObject({ code: "BOOKING_NOT_OPEN" })
+    await expect(bookAs(arena.id, 601, { sessionId: notYet.id })).rejects.toMatchObject({ code: "BOOKING_NOT_OPEN" })
     const draft = await makeOpenSession(ctx.db, { publish: false })
-    await expect(createBooking(arena.id, { sessionId: draft.id, customer: customer(602), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })).rejects.toMatchObject({ code: "SESSION_NOT_BOOKABLE" })
+    await expect(bookAs(arena.id, 602, { sessionId: draft.id })).rejects.toMatchObject({ code: "SESSION_NOT_BOOKABLE" })
   })
 })
 
@@ -163,7 +209,7 @@ describe("payment verification issues exactly one ticket", () => {
 
   it("does not confirm a failed or pending payment", async () => {
     const session = await makeOpenSession(ctx.db)
-    const { booking } = await createBooking(arena.id, { sessionId: session.id, customer: customer(710), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+    const { booking } = await bookAs(arena.id, 710, { sessionId: session.id })
     const { payment } = await initializePayment(arena.id, booking.id)
     expect((await verifyPayment(arena.id, payment.reference)).status).toBe("PENDING")
     await setMockOutcome(payment.reference, "failed")
@@ -175,7 +221,7 @@ describe("payment verification issues exactly one ticket", () => {
 
   it("reuses the pending payment on repeated initialize calls", async () => {
     const session = await makeOpenSession(ctx.db)
-    const { booking } = await createBooking(arena.id, { sessionId: session.id, customer: customer(720), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+    const { booking } = await bookAs(arena.id, 720, { sessionId: session.id })
     const a = await initializePayment(arena.id, booking.id)
     const b = await initializePayment(arena.id, booking.id)
     expect(b.payment.id).toBe(a.payment.id)
@@ -236,7 +282,7 @@ describe("refunds", () => {
     const admin2 = await getAdminUser(ctx.db)
     expect((await validateTicket(arena.id, buildQrPayload(arena.id, ticket.qrToken), { mode: "admit", actor: { ...testActor, id: admin2.id } })).result).toBe("NOT_VALID")
     // Slot is bookable again.
-    const rebook = await createBooking(arena.id, { sessionId: session.id, customer: customer(901), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+    const rebook = await bookAs(arena.id, 901, { sessionId: session.id })
     expect(rebook.slot).toEqual({ teamNumber: 1, slotNumber: 1 })
   })
 })

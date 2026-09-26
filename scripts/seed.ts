@@ -18,6 +18,7 @@ import { db, schema } from "@/server/db"
 import { getDefaultArena } from "@/server/services/arenas"
 import { createSession, cancelSession } from "@/server/services/sessions"
 import { createBooking } from "@/server/services/bookings"
+import { upsertCustomerByEmail } from "@/server/services/customers"
 import { initializePayment, verifyPayment } from "@/server/services/payments"
 import { setMockOutcome } from "@/server/payments/mock"
 import { validateTicket, buildQrPayload } from "@/server/services/tickets"
@@ -174,7 +175,14 @@ async function main() {
               email: `player${n}@${plan.emailDomain}`,
               phone: `+23480000${String(n).padStart(4, "0")}`,
             }
-        const { booking } = await createBooking(arenaId, { sessionId, customer, idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+        // Booking requires an account, so the seed creates one first — the same
+        // order a real customer goes through.
+        const account = await upsertCustomerByEmail(arenaId, customer)
+        const { booking } = await createBooking(
+          arenaId,
+          { sessionId, idempotencyKey: randomUUID() },
+          { actor: { type: "customer", id: account.id, name: account.name }, customerId: account.id }
+        )
         const { payment } = await initializePayment(arenaId, booking.id)
         await setMockOutcome(payment.reference, "success")
         const outcome = await verifyPayment(arenaId, payment.reference)

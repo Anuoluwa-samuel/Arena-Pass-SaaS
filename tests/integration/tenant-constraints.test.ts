@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm"
 import * as schema from "@/server/db/schema"
 import { createTestDb } from "../helpers/db"
 import { expectDbError } from "../helpers/errors"
-import { getArena, getAdminUser, makeArena, testActor } from "../helpers/fixtures"
+import { getArena, getAdminUser, makeArena, testActor , bookInline} from "../helpers/fixtures"
 import { createSession } from "@/server/services/sessions"
 import { createBooking } from "@/server/services/bookings"
 import { initializePayment, verifyPayment } from "@/server/services/payments"
@@ -47,7 +47,7 @@ beforeAll(async () => {
   A.session = (await mkSession(a.id, "A session")).id
   B.session = (await mkSession(b.id, "B session")).id
 
-  const bookingA = await createBooking(a.id, { sessionId: A.session, customer: { name: "A", email: "a@example.com", phone: "" }, idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+  const bookingA = await bookInline(a.id, { name: "A", email: "a@example.com", phone: "" }, { sessionId: A.session })
   A.booking = bookingA.booking.id
   A.customer = bookingA.booking.customerId
   const payA = await initializePayment(a.id, A.booking)
@@ -57,7 +57,7 @@ beforeAll(async () => {
   if (paid.status !== "PAID") throw new Error("setup")
   A.ticket = paid.ticket.id
 
-  const bookingB = await createBooking(b.id, { sessionId: B.session, customer: { name: "B", email: "b@example.com", phone: "" }, idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+  const bookingB = await bookInline(b.id, { name: "B", email: "b@example.com", phone: "" }, { sessionId: B.session })
   B.booking = bookingB.booking.id
   B.customer = bookingB.booking.customerId
 
@@ -68,7 +68,7 @@ beforeAll(async () => {
 
   // A booking in A that has no ticket yet, so the one-ticket-per-booking index
   // does not fire before the composite key under test.
-  const spare = await createBooking(a.id, { sessionId: A.session, customer: { name: "A2", email: "a2@example.com", phone: "" }, idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+  const spare = await bookInline(a.id, { name: "A2", email: "a2@example.com", phone: "" }, { sessionId: A.session })
   A.spareBooking = spare.booking.id
 
   // A session in A with no grid, so team/slot numbering does not collide.

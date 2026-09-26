@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+
 import { useMemo, useState } from "react"
 import { Calendar, Clock, Lock, MapPin, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
@@ -20,13 +22,14 @@ import type { PublicSession, PublicTeam } from "@/server/serializers"
 interface Props {
   session: PublicSession
   teams: PublicTeam[]
-  customer: { name: string; email: string; phone: string } | null
+  /** The signed-in account. Booking requires one, so this is never null. */
+  customer: { name: string; email: string; phone: string }
 }
 
 export function CheckoutForm({ session, teams, customer }: Props) {
-  const [name, setName] = useState(customer?.name ?? "")
-  const [email, setEmail] = useState(customer?.email ?? "")
-  const [phone, setPhone] = useState(customer?.phone ?? "")
+  // Identity is the account's and is shown, not edited: the server takes it
+  // from the session and ignores anything sent in the body. An editable field
+  // here would be a lie about what the request can change.
   const [playerName, setPlayerName] = useState("")
   const [sameAsCustomer, setSameAsCustomer] = useState(true)
   const [team, setTeam] = useState<number | null>(null)
@@ -42,7 +45,6 @@ export function CheckoutForm({ session, teams, customer }: Props) {
     try {
       const res = await api.post<{ booking: { id: string }; payment: { reference: string; authorizationUrl: string } }>("/api/bookings", {
         sessionId: session.id,
-        customer: { name, email, phone },
         playerName: sameAsCustomer ? undefined : playerName,
         preferredTeamNumber: team ?? undefined,
         idempotencyKey,
@@ -70,19 +72,22 @@ export function CheckoutForm({ session, teams, customer }: Props) {
         <form onSubmit={submit} className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Your details</CardTitle>
+              <CardTitle>Booking as</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Field id="name" label="Full name" error={errors["customer.name"]}>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada Okafor" autoComplete="name" required minLength={2} aria-invalid={!!errors["customer.name"]} />
-              </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field id="email" label="Email" hint="Your ticket is sent here" error={errors["customer.email"]}>
-                  <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" required inputMode="email" aria-invalid={!!errors["customer.email"]} />
-                </Field>
-                <Field id="phone" label="Phone" hint="Optional" error={errors["customer.phone"]}>
-                  <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+234 800 000 0000" autoComplete="tel" inputMode="tel" />
-                </Field>
+              {/* Shown, not editable: the server reads the account from the
+                  session and ignores anything sent here, so an input would
+                  promise a change the request cannot make. */}
+              <div className="rounded-xl border bg-muted/40 p-4">
+                <p className="font-medium">{customer.name}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">{customer.email}</p>
+                {customer.phone && <p className="text-sm text-muted-foreground">{customer.phone}</p>}
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Your ticket goes to this address.{" "}
+                  <Link href="/account/profile" className="underline underline-offset-4 hover:text-foreground">
+                    Update your details
+                  </Link>
+                </p>
               </div>
               <div className="flex items-center gap-2 pt-1">
                 <Checkbox id="same" checked={sameAsCustomer} onCheckedChange={(v) => setSameAsCustomer(v === true)} />

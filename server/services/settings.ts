@@ -21,7 +21,6 @@ export const settingsSchema = z.object({
   supportEmail: z.string().email().or(z.literal("")).default(""),
   supportPhone: z.string().max(40).default(""),
   sessionReminderHours: z.number().int().min(0).max(72).default(24),
-  allowGuestCheckout: z.boolean().default(true),
   maintenanceMode: z.boolean().default(false),
 })
 export type Settings = z.infer<typeof settingsSchema>

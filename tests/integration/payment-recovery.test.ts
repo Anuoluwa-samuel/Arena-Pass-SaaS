@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto"
 import { and, desc, eq } from "drizzle-orm"
 import { schema } from "@/server/db"
 import { createTestDb } from "../helpers/db"
-import { getArena, customer, getAdminUser, makeOpenSession, testActor } from "../helpers/fixtures"
+import { getArena, customer, getAdminUser, makeOpenSession, testActor , bookAs} from "../helpers/fixtures"
 import { createBooking } from "@/server/services/bookings"
 import { countPaymentsNeedingRefund, handleProviderWebhook, initializePayment, listPayments, reconcilePendingPayments, refundPayment, verifyPayment } from "@/server/services/payments"
 import { getSessionById } from "@/server/services/sessions"
@@ -24,7 +24,7 @@ afterAll(async () => {
 })
 
 async function book(sessionId: string, i: number) {
-  const { booking } = await createBooking(arena.id, { sessionId, customer: customer(i), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+  const { booking } = await bookAs(arena.id, i, { sessionId })
   const { payment } = await initializePayment(arena.id, booking.id)
   return { booking, payment }
 }
@@ -152,7 +152,7 @@ describe("provider webhooks", () => {
 
   it("rejects a delivery whose signature does not verify against the arena's key", async () => {
     const session = await makeOpenSession(ctx.db)
-    const { booking } = await createBooking(arena.id, { sessionId: session.id, customer: customer(700), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+    const { booking } = await bookAs(arena.id, 700, { sessionId: session.id })
     const { payment } = await initializePayment(arena.id, booking.id)
 
     __setPaymentProviderForTests(stub(null))
@@ -167,7 +167,7 @@ describe("provider webhooks", () => {
 
   it("acknowledges a signed event that carries nothing to verify", async () => {
     const session = await makeOpenSession(ctx.db)
-    const { booking } = await createBooking(arena.id, { sessionId: session.id, customer: customer(701), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+    const { booking } = await bookAs(arena.id, 701, { sessionId: session.id })
     const { payment } = await initializePayment(arena.id, booking.id)
 
     __setPaymentProviderForTests(stub({ type: "refund.processed", raw: {} }))
@@ -182,7 +182,7 @@ describe("provider webhooks", () => {
 
   it("processes identical bytes exactly once, however many times they arrive", async () => {
     const session = await makeOpenSession(ctx.db)
-    const { booking } = await createBooking(arena.id, { sessionId: session.id, customer: customer(702), idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+    const { booking } = await bookAs(arena.id, 702, { sessionId: session.id })
     const { payment } = await initializePayment(arena.id, booking.id)
     await setMockOutcome(payment.reference, "success")
 

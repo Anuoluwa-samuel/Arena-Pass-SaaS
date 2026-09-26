@@ -13,7 +13,7 @@ import { listNotifications, markRead, notify } from "@/server/services/notificat
 import { listAuditLogs, getDashboardOverview } from "@/server/services/analytics"
 import { setMockOutcome } from "@/server/payments/mock"
 import { createTestDb } from "../helpers/db"
-import { getArena, getAdminUser, testActor } from "../helpers/fixtures"
+import { getArena, getAdminUser, testActor , bookInline} from "../helpers/fixtures"
 
 /**
  * The cross-tenant matrix for the service layer.
@@ -62,11 +62,7 @@ beforeAll(async () => {
   )
   A.session = session.id
 
-  const { booking } = await createBooking(
-    a.id,
-    { sessionId: session.id, customer: { name: "A Player", email: "a.player@example.com", phone: "" }, idempotencyKey: randomUUID() },
-    { actor: { type: "customer" } }
-  )
+  const { booking } = await bookInline(a.id, { name: "A Player", email: "a.player@example.com", phone: "" }, { sessionId: session.id })
   A.booking = booking.id
   A.customer = booking.customerId
 
@@ -179,7 +175,7 @@ describe("writes: Arena B acting on Arena A's rows", () => {
 
   it("cannot book into the session, even with a valid id", async () => {
     await expect(
-      createBooking(b.id, { sessionId: A.session, customer: { name: "B", email: "b@example.com", phone: "" }, idempotencyKey: randomUUID() }, { actor: { type: "customer" } })
+      bookInline(b.id, { name: "B", email: "b@example.com", phone: "" }, { sessionId: A.session })
     ).rejects.toMatchObject({ code: "SESSION_NOT_FOUND" })
   })
 

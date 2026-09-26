@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto"
 import { desc, eq } from "drizzle-orm"
 import * as schema from "@/server/db/schema"
 import { createTestDb } from "../helpers/db"
-import { getArena, getAdminUser, makeArena, makeOpenSession, customer, testActor } from "../helpers/fixtures"
+import { getArena, getAdminUser, makeArena, makeOpenSession, customer, testActor , bookAs} from "../helpers/fixtures"
 import { createBooking } from "@/server/services/bookings"
 import { initializePayment, verifyPayment } from "@/server/services/payments"
 import { setMockOutcome } from "@/server/payments/mock"
@@ -30,11 +30,7 @@ let seq = 0
 /** A paid ticket, through the real booking and payment path. */
 async function issueTicket(sessionId?: string) {
   const session = sessionId ? { id: sessionId } : await makeOpenSession(ctx.db)
-  const { booking } = await createBooking(
-    arena.id,
-    { sessionId: session.id, customer: customer(900 + seq++), idempotencyKey: randomUUID() },
-    { actor: { type: "customer" } }
-  )
+  const { booking } = await bookAs(arena.id, 900 + seq++, { sessionId: session.id })
   const { payment } = await initializePayment(arena.id, booking.id)
   await setMockOutcome(payment.reference, "success")
   const outcome = await verifyPayment(arena.id, payment.reference)

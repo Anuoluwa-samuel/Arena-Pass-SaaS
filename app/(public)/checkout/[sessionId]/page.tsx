@@ -22,7 +22,11 @@ export default async function CheckoutPage({ params }: { params: Promise<{ sessi
   }
   const session = toPublicSession(data.session)
   if (session.status !== "OPEN_FOR_BOOKING") redirect(`/sessions/${sessionId}`)
+  // Booking requires an account. Sending an unauthenticated visitor to sign in
+  // — with the way back — is kinder than letting them fill a form the API will
+  // refuse, and it is the same rule the route enforces rather than a second one.
   const customer = await getCurrentCustomer()
+  if (!customer) redirect(`/login?next=${encodeURIComponent(`/checkout/${sessionId}`)}`)
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -33,9 +37,9 @@ export default async function CheckoutPage({ params }: { params: Promise<{ sessi
       <div className="mb-8">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Step 1 of 2</p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight">Reserve your slot</h1>
-        <p className="mt-2 text-muted-foreground">Tell us who&apos;s playing, then pay securely to confirm.</p>
+        <p className="mt-2 text-muted-foreground">Confirm who&apos;s playing, then pay securely to hold your slot.</p>
       </div>
-      <CheckoutForm session={session} teams={toPublicTeams(data.teams)} customer={customer ? { name: customer.name, email: customer.email, phone: customer.phone ?? "" } : null} />
+      <CheckoutForm session={session} teams={toPublicTeams(data.teams)} customer={{ name: customer.name, email: customer.email, phone: customer.phone ?? "" }} />
     </main>
   )
 }

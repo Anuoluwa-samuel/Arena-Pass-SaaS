@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto"
 import { and, eq, isNotNull } from "drizzle-orm"
 import { schema, type Database } from "@/server/db"
 import { createSession } from "@/server/services/sessions"
+import { createBooking } from "@/server/services/bookings"
+import { upsertCustomerByEmail } from "@/server/services/customers"
 import type { AuditActor } from "@/server/services/audit"
 
 export const testActor: AuditActor & { id: string } = { type: "user", id: randomUUID(), name: "Test Admin" }
@@ -80,4 +82,43 @@ export async function makeOpenSession(db: Database, overrides: Partial<Parameter
 
 export function customer(i: number) {
   return { name: `Player ${i}`, email: `player${i}@example.com`, phone: "" }
+}
+
+/**
+ * The account a booking is made from.
+ *
+ * Booking requires one: the service takes a `customerId` and the route reads it
+ * from the signed-in session, so a test that wants to book has to have an
+ * account first — exactly as a person does.
+ */
+export async function customerAccount(arenaId: string, i: number) {
+  return upsertCustomerByEmail(arenaId, customer(i))
+}
+
+/** Books from a named account, for tests that care who the customer is. */
+export async function bookInline(
+  arenaId: string,
+  who: { name: string; email: string; phone?: string },
+  input: Omit<Parameters<typeof createBooking>[1], "idempotencyKey"> & { idempotencyKey?: string }
+) {
+  const account = await upsertCustomerByEmail(arenaId, { phone: "", ...who })
+  return createBooking(
+    arenaId,
+    { idempotencyKey: randomUUID(), ...input },
+    { actor: { type: "customer", id: account.id, name: account.name }, customerId: account.id }
+  )
+}
+
+/** Creates the account and books in one step, for tests about the booking. */
+export async function bookAs(
+  arenaId: string,
+  i: number,
+  input: Omit<Parameters<typeof createBooking>[1], "idempotencyKey"> & { idempotencyKey?: string }
+) {
+  const account = await customerAccount(arenaId, i)
+  return createBooking(
+    arenaId,
+    { idempotencyKey: randomUUID(), ...input },
+    { actor: { type: "customer", id: account.id, name: account.name }, customerId: account.id }
+  )
 }

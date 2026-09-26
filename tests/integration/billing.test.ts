@@ -23,7 +23,7 @@ import { validateTicket, buildQrPayload } from "@/server/services/tickets"
 import { setMockOutcome } from "@/server/payments/mock"
 import { createStaff } from "@/server/services/users"
 import { createTestDb } from "../helpers/db"
-import { getArena, getAdminUser, testActor } from "../helpers/fixtures"
+import { getArena, getAdminUser, testActor , bookInline} from "../helpers/fixtures"
 
 /**
  * Platform billing: what an organization is on, and what that lets it do.
@@ -295,11 +295,7 @@ describe("a lapsed subscription never reaches the venue's customers", () => {
     expect(publicSessions.some((s) => s.id === session.id)).toBe(true)
 
     // A customer can still book.
-    const { booking } = await createBooking(
-      arena.id,
-      { sessionId: session.id, customer: { name: "Paying Customer", email: "customer@fixture.local", phone: "+2348000000001" }, idempotencyKey: randomUUID() },
-      { actor: { type: "customer" } }
-    )
+    const { booking } = await bookInline(arena.id, { name: "Paying Customer", email: "customer@fixture.local", phone: "+2348000000001" }, { sessionId: session.id })
     expect(booking.status).toBe("PENDING")
 
     // And still pay.

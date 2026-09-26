@@ -63,7 +63,6 @@ export function SettingsForm({ initial, canManage }: { initial: Settings; canMan
       <Card className="lg:col-span-2">
         <CardHeader><CardTitle className="text-base">Booking behaviour</CardTitle></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <Toggle label="Allow guest checkout" desc="Customers can book with just an email; otherwise they must create an account first." checked={s.allowGuestCheckout} onChange={(v) => set("allowGuestCheckout", v)} disabled={dis} />
           <Toggle label="Maintenance mode" desc="Shows a notice on the public site and blocks new bookings." checked={s.maintenanceMode} onChange={(v) => set("maintenanceMode", v)} disabled={dis} />
         </CardContent>
       </Card>
