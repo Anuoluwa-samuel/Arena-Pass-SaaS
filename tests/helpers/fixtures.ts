@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { eq } from "drizzle-orm"
+import { and, eq, isNotNull } from "drizzle-orm"
 import { schema, type Database } from "@/server/db"
 import { createSession } from "@/server/services/sessions"
 import type { AuditActor } from "@/server/services/audit"
@@ -32,8 +32,28 @@ export async function getArena(db: Database) {
   return (await db.query.arenas.findFirst({ where: eq(schema.arenas.slug, "main") }))!
 }
 
+/**
+ * The default arena's own owner — an arena operator, with no platform role.
+ *
+ * Deliberately not "the first user": that used to be the bootstrap account,
+ * which held a platform role *and* an arena membership. The two are separate
+ * people now, and a test that wants an arena actor wants this one.
+ */
 export async function getAdminUser(db: Database) {
-  return (await db.query.users.findFirst())!
+  const arena = await getArena(db)
+  const [row] = await db
+    .select({ user: schema.users })
+    .from(schema.arenaMemberships)
+    .innerJoin(schema.users, eq(schema.users.id, schema.arenaMemberships.userId))
+    .innerJoin(schema.roles, eq(schema.roles.id, schema.arenaMemberships.roleId))
+    .where(and(eq(schema.arenaMemberships.arenaId, arena.id), eq(schema.roles.key, "ARENA_OWNER")))
+    .limit(1)
+  return row.user
+}
+
+/** The platform operator, who is a member of no arena at all. */
+export async function getPlatformUser(db: Database) {
+  return (await db.query.users.findFirst({ where: isNotNull(schema.users.platformRoleId) }))!
 }
 
 export async function makeOpenSession(db: Database, overrides: Partial<Parameters<typeof createSession>[0]> = {}) {

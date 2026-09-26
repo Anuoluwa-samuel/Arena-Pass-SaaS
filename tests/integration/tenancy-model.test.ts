@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest"
-import { and, eq } from "drizzle-orm"
+import { and, eq, isNotNull } from "drizzle-orm"
 import * as schema from "@/server/db/schema"
 import { ARENA_ROLE_KEYS, PLATFORM_ROLE_KEYS, ROLE_KEYS } from "@/lib/domain/constants"
 import { createTestDb } from "../helpers/db"
@@ -56,18 +56,29 @@ describe("baseline tenancy shape", () => {
     expect(organization.status).toBe("ACTIVE")
   })
 
-  it("gives the bootstrap account a platform role and a separate arena membership", async () => {
-    const user = (await ctx.db.query.users.findFirst())!
-    const platformRole = (await ctx.db.query.roles.findFirst({ where: eq(schema.roles.id, user.platformRoleId!) }))!
+  it("bootstraps the platform operator and the arena operator as two people", async () => {
+    // One account holding both a platform role and an arena membership is what
+    // the separation is *for*: whoever runs the platform has no business in a
+    // venue's data, and a venue's owner has no business across every venue.
+    const platformUser = (await ctx.db.query.users.findFirst({
+      where: isNotNull(schema.users.platformRoleId),
+    }))!
+    const platformRole = (await ctx.db.query.roles.findFirst({ where: eq(schema.roles.id, platformUser.platformRoleId!) }))!
     expect(platformRole.key).toBe("PLATFORM_OWNER")
     expect(platformRole.scope).toBe("PLATFORM")
+    expect(
+      await ctx.db.query.arenaMemberships.findFirst({ where: eq(schema.arenaMemberships.userId, platformUser.id) })
+    ).toBeUndefined()
 
-    // The platform role alone must not be what grants arena access.
-    const membership = (await ctx.db.query.arenaMemberships.findFirst({ where: eq(schema.arenaMemberships.userId, user.id) }))!
+    // The arena has an owner of its own, who holds no platform role.
+    const membership = (await ctx.db.query.arenaMemberships.findFirst())!
     const membershipRole = (await ctx.db.query.roles.findFirst({ where: eq(schema.roles.id, membership.roleId) }))!
     expect(membershipRole.key).toBe("ARENA_OWNER")
     expect(membershipRole.scope).toBe("ARENA")
     expect(membership.status).toBe("ACTIVE")
+    const arenaUser = (await ctx.db.query.users.findFirst({ where: eq(schema.users.id, membership.userId) }))!
+    expect(arenaUser.platformRoleId).toBeNull()
+    expect(arenaUser.id).not.toBe(platformUser.id)
   })
 })
 

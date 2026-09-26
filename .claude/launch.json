@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "game-slots",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "-p", "4100"],
+      "port": 4100,
+      "url": "http://main.localhost:4100"
+    }
+  ]
+}

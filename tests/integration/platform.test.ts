@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest"
-import { and, eq, isNull } from "drizzle-orm"
+import { and, eq, isNull, isNotNull } from "drizzle-orm"
 import * as schema from "@/server/db/schema"
 import { createTestDb } from "../helpers/db"
-import { getArena, getAdminUser, makeArena, testActor } from "../helpers/fixtures"
+import { getArena, getPlatformUser, makeArena, testActor } from "../helpers/fixtures"
 import {
   IMPERSONATION_TTL_MS,
   endImpersonation,
@@ -28,9 +28,11 @@ beforeAll(async () => {
   ctx = await createTestDb()
   main = await getArena(ctx.db)
   other = await makeArena(ctx.db, "arena-b")
-  const admin = await getAdminUser(ctx.db)
-  platformUserId = admin.id
-  actor = { ...testActor, id: admin.id }
+  // The platform operator, not the arena's owner: they are two people now, and
+  // impersonation is precisely the mechanism for someone with no membership.
+  const platformUser = await getPlatformUser(ctx.db)
+  platformUserId = platformUser.id
+  actor = { ...testActor, id: platformUser.id }
 })
 afterAll(async () => {
   await ctx.client.close()
@@ -109,6 +111,55 @@ describe("feature flags are per arena", () => {
   })
 })
 
+describe("the platform is not a tenant", () => {
+  /**
+   * Whoever runs Game Slots has no business reading a venue's customers, and a
+   * venue's owner has no business seeing every venue's takings. The permission
+   * scopes were always disjoint, but the bootstrap used to give one account
+   * both a platform role and an ARENA_OWNER membership — which undid the
+   * separation in practice while leaving it intact in theory.
+   */
+  it("gives the platform owner no arena membership at all", async () => {
+    const platformOwner = (await ctx.db.query.users.findFirst({
+      where: isNotNull(schema.users.platformRoleId),
+    }))!
+    const memberships = await loadArenaMemberships(platformOwner.id)
+    expect(memberships, "the platform owner must not be a member of any arena").toEqual([])
+  })
+
+  it("gives arena owners no platform role", async () => {
+    const owners = await ctx.db
+      .select({ platformRoleId: schema.users.platformRoleId, email: schema.users.email })
+      .from(schema.arenaMemberships)
+      .innerJoin(schema.users, eq(schema.users.id, schema.arenaMemberships.userId))
+      .innerJoin(schema.roles, eq(schema.roles.id, schema.arenaMemberships.roleId))
+      .where(eq(schema.roles.key, "ARENA_OWNER"))
+
+    for (const owner of owners) {
+      expect(owner.platformRoleId, `${owner.email} holds a platform role`).toBeNull()
+    }
+  })
+
+  it("still leaves every arena with an owner", async () => {
+    // The separation must not be achieved by removing the only owner.
+    const arenas = await ctx.db.query.arenas.findMany()
+    for (const arena of arenas) {
+      const owners = await ctx.db
+        .select({ id: schema.arenaMemberships.id })
+        .from(schema.arenaMemberships)
+        .innerJoin(schema.roles, eq(schema.roles.id, schema.arenaMemberships.roleId))
+        .where(
+          and(
+            eq(schema.arenaMemberships.arenaId, arena.id),
+            eq(schema.arenaMemberships.status, "ACTIVE"),
+            eq(schema.roles.key, "ARENA_OWNER")
+          )
+        )
+      expect(owners.length, `${arena.slug} has no active owner`).toBeGreaterThan(0)
+    }
+  })
+})
+
 describe("impersonation is the only way across the line", () => {
   it("grants nothing before it starts", async () => {
     const me = await principal(platformUserId)
@@ -176,14 +227,25 @@ describe("impersonation is the only way across the line", () => {
   })
 
   it("does not weaken a real membership the operator already has", async () => {
-    // The bootstrap account is a genuine ARENA_OWNER of `main`. Impersonating
-    // it must not replace that with the read-only grant.
+    // Platform staff hold no arena membership by default — the two are
+    // separate people, deliberately. This is the unusual case where one person
+    // is both, so the membership is created here rather than assumed: if they
+    // genuinely run an arena, impersonating it must not downgrade them to the
+    // read-only grant.
+    const ownerRole = (await ctx.db.query.roles.findFirst({ where: eq(schema.roles.key, "ARENA_OWNER") }))!
+    const [membership] = await ctx.db
+      .insert(schema.arenaMemberships)
+      .values({ arenaId: main.id, userId: platformUserId, roleId: ownerRole.id, status: "ACTIVE", acceptedAt: new Date() })
+      .returning()
+
     await startImpersonation(platformUserId, main.id, { reason: "Looking at my own arena", actor })
     const me = (await loadUserPrincipal(platformUserId, "session-1"))!
     const access = me.memberships.find((m) => m.arenaId === main.id)!
     expect(access.impersonated).toBeUndefined()
     expect(authorizeArena(me, main.id, "sessions.manage").roleKey).toBe("ARENA_OWNER")
+
     await endImpersonation(platformUserId)
+    await ctx.db.delete(schema.arenaMemberships).where(eq(schema.arenaMemberships.id, membership.id))
   })
 
   it("is short-lived by construction", () => {

@@ -114,27 +114,56 @@ export async function ensureBaseline(database: Database) {
       .onConflictDoNothing()
   }
 
-  // Bootstrap super admin (credentials from env, dev defaults otherwise)
+  // Two bootstrap accounts, deliberately two people.
+  //
+  // The platform is not a tenant. Whoever runs Game Slots has no business
+  // reading a venue's customers, and a venue's owner has no business seeing
+  // every other venue's takings — so the platform owner gets no arena
+  // membership, and the arena owner gets no platform role. The permission
+  // scopes were always disjoint; giving one account both was a seeding
+  // decision that quietly undid the separation in practice.
+  //
+  // A platform operator who genuinely needs to look inside an arena does so
+  // through impersonation: read-only, time-limited and audited.
   const [{ count }] = await database.select({ count: sql<number>`count(*)::int` }).from(schema.users)
   if (Number(count) === 0) {
-    const email = process.env.BOOTSTRAP_ADMIN_EMAIL ?? "admin@gameslots.local"
-    const password = process.env.BOOTSTRAP_ADMIN_PASSWORD ?? "ChangeMe123!"
+    const platformEmail = process.env.BOOTSTRAP_ADMIN_EMAIL ?? "admin@gameslots.local"
+    const platformPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD ?? "ChangeMe123!"
+    const ownerEmail = process.env.BOOTSTRAP_ARENA_OWNER_EMAIL ?? `owner@${arena.slug}.local`
+    const ownerPassword = process.env.BOOTSTRAP_ARENA_OWNER_PASSWORD ?? platformPassword
     // A public deployment must never get the well-known development login.
-    if (process.env.NODE_ENV === "production") assertSafeBootstrapAdmin(process.env.BOOTSTRAP_ADMIN_EMAIL, process.env.BOOTSTRAP_ADMIN_PASSWORD)
-    const platformOwner = (await database.query.roles.findFirst({ where: eq(schema.roles.key, "PLATFORM_OWNER") }))!
-    const arenaOwner = (await database.query.roles.findFirst({ where: eq(schema.roles.key, "ARENA_OWNER") }))!
-    const [bootstrap] = await database
+    if (process.env.NODE_ENV === "production") {
+      assertSafeBootstrapAdmin(process.env.BOOTSTRAP_ADMIN_EMAIL, process.env.BOOTSTRAP_ADMIN_PASSWORD)
+      assertSafeBootstrapAdmin(process.env.BOOTSTRAP_ARENA_OWNER_EMAIL, process.env.BOOTSTRAP_ARENA_OWNER_PASSWORD)
+    }
+    const platformOwnerRole = (await database.query.roles.findFirst({ where: eq(schema.roles.key, "PLATFORM_OWNER") }))!
+    const arenaOwnerRole = (await database.query.roles.findFirst({ where: eq(schema.roles.key, "ARENA_OWNER") }))!
+
+    await database
       .insert(schema.users)
-      .values({ platformRoleId: platformOwner.id, email, name: "Platform Owner", passwordHash: await hashPassword(password) })
+      .values({
+        platformRoleId: platformOwnerRole.id,
+        email: platformEmail,
+        name: "Platform Owner",
+        passwordHash: await hashPassword(platformPassword),
+      })
       .returning()
-    // The bootstrap account operates the default arena as well as the
-    // platform, so it needs a membership like any other arena user. Platform
-    // permissions never imply tenant access on their own.
+
+    // The arena needs an owner of its own, or it is an arena nobody can run.
+    const [owner] = await database
+      .insert(schema.users)
+      .values({ email: ownerEmail, name: "Arena Owner", passwordHash: await hashPassword(ownerPassword) })
+      .returning()
     await database
       .insert(schema.arenaMemberships)
-      .values({ arenaId: arena.id, userId: bootstrap.id, roleId: arenaOwner.id, status: "ACTIVE", acceptedAt: new Date() })
+      .values({ arenaId: arena.id, userId: owner.id, roleId: arenaOwnerRole.id, status: "ACTIVE", acceptedAt: new Date() })
       .onConflictDoNothing()
-    logger.warn("baseline.admin_created", { email, note: "Change this password immediately" })
+
+    logger.warn("baseline.admins_created", {
+      platform: platformEmail,
+      arenaOwner: ownerEmail,
+      note: "Change both passwords immediately",
+    })
   }
 }
 

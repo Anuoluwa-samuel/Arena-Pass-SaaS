@@ -24,6 +24,7 @@ import { validateTicket, buildQrPayload } from "@/server/services/tickets"
 import { createFaq, createService, createAnnouncement, createBanner } from "@/server/services/cms"
 import { createStaff } from "@/server/services/users"
 import { registerArena, getOnboardingState, launchArena } from "@/server/services/onboarding"
+import { setSubscriptionPlan } from "@/server/services/billing"
 import { savePaymentAccount } from "@/server/payments/accounts"
 import { updateSettings } from "@/server/services/settings"
 import { SYSTEM_ACTOR, type AuditActor } from "@/server/services/audit"
@@ -72,7 +73,12 @@ async function main() {
   // ---------------------------------------------------------------------
   const arenaA = await getDefaultArena()
   await database.update(schema.arenas).set({ name: "Ikeja City Arena" }).where(eq(schema.arenas.id, arenaA.id))
-  const platformOwner = (await database.query.users.findFirst())!
+  // Ikeja's own owner, created by the baseline alongside — and separate from —
+  // the platform owner. Everything this arena does is done as its own operator,
+  // never as whoever runs Game Slots.
+  const ikejaOwner = (await database.query.users.findFirst({
+    where: eq(schema.users.email, `owner@${arenaA.slug}.local`),
+  }))!
 
   // ---------------------------------------------------------------------
   // Arena B — registered the way a real tenant registers, through the same
@@ -98,7 +104,7 @@ async function main() {
       secondPitch: "Pitch B",
       priceMajor: 5000,
       brand: { primary: "#22c55e", accent: "#0ea5e9" },
-      actor: { type: "user", id: platformOwner.id, name: platformOwner.name },
+      actor: { type: "user", id: ikejaOwner.id, name: ikejaOwner.name },
     },
     {
       arenaId: registered.arena.id,
@@ -113,13 +119,22 @@ async function main() {
     },
   ]
 
+  // The demo arenas carry more staff and sessions than the free tier covers,
+  // and the seed exists to produce a full-looking product rather than to
+  // demonstrate a limit being hit. Both go on the unlimited plan; move one to
+  // Starter from Platform → Subscriptions to watch the limits bite.
+  for (const organizationId of [arenaA.organizationId!, registered.organization.id]) {
+    await setSubscriptionPlan(organizationId, "scale", { actor: SYSTEM_ACTOR, reason: "development seed" })
+  }
+
   for (const plan of plans) await seedArena(plan)
 
   console.log("\nSeed complete — two arenas.")
-  console.log("  Platform owner : admin@gameslots.local / ChangeMe123!  (also ARENA_OWNER of Game Slots)")
-  console.log("  Arena B owner  : owner@lekki.local / ChangeMe123!")
+  console.log("  Platform owner : admin@gameslots.local / ChangeMe123!  (platform only \u2014 no arena access)")
+  console.log("  Ikeja owner    : owner@main.local / ChangeMe123!        (Ikeja City Arena only)")
+  console.log("  Lekki owner    : owner@lekki.local / ChangeMe123!       (Lekki Football Arena only)")
   console.log("  Staff          : grace.admin@, musa.manager@, folake.finance@, sam.staff@, tola.ticketagent@")
-  console.log("                   at @gameslots.local and @lekki.local respectively")
+  console.log("                   at @ikeja.local and @lekki.local respectively")
   console.log("  Shared customer: ada.shared@example.com plays at both arenas, with a separate account at each")
   console.log("\n  Reach them with  Host: main.localhost  and  Host: lekki.localhost")
   process.exit(0)
