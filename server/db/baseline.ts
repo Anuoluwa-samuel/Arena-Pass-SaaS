@@ -5,6 +5,7 @@ import * as schema from "./schema"
 import { DEFAULT_ROLE_PERMISSIONS, ROLE_KEYS, ROLE_LABELS, roleScopeOf } from "@/lib/domain/constants"
 import { hashPassword } from "@/server/auth/password"
 import { logger } from "@/server/observability/logger"
+import { startTrial } from "@/server/services/billing"
 import { DEFAULT_CMS_CONTENT } from "@/lib/cms/defaults"
 
 /**
@@ -59,6 +60,18 @@ export async function ensureBaseline(database: Database) {
       .values({ slug: "main", name: process.env.APP_NAME ?? "Game Slots", status: "ACTIVE" })
       .returning()
     logger.info("baseline.organization_created", { organizationId: organization.id })
+  }
+
+  // Every organization has a subscription. The backfill in migration 0015 can
+  // only reach organizations that existed when it ran, and this one is created
+  // afterwards on a fresh install — so the rule has to be enforced here too,
+  // or a brand-new deployment is the one shape that breaks it.
+  const subscription = await database.query.subscriptions.findFirst({
+    where: eq(schema.subscriptions.organizationId, organization.id),
+  })
+  if (!subscription) {
+    await startTrial(organization.id, database)
+    logger.info("baseline.subscription_created", { organizationId: organization.id })
   }
 
   // Default arena. Created ACTIVE and already launched: it is the arena the

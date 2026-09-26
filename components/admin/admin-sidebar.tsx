@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
-import { BarChart3, Bell, CalendarDays, CreditCard, Image as ImageIcon, KeyRound, LayoutDashboard, LayoutTemplate, Receipt, Rocket, ScanLine, ScrollText, Settings, Shield, Ticket, Users, ChevronRight } from "lucide-react"
+import { BarChart3, Bell, CalendarDays, CreditCard, Image as ImageIcon, KeyRound, LayoutDashboard, LayoutTemplate, Receipt, Rocket, ScanLine, ScrollText, Settings, Shield, Ticket, Users, ChevronRight, Wallet } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -32,6 +32,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "scan-line": ScanLine,
   users: Users,
   "credit-card": CreditCard,
+  wallet: Wallet,
   receipt: Receipt,
   "layout-template": LayoutTemplate,
   image: ImageIcon,

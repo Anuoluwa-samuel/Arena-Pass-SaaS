@@ -9,6 +9,7 @@ import type { SessionInput } from "@/lib/validation/sessions"
 import { recordAudit, type AuditActor } from "./audit"
 import { releaseExpiredHoldsForSession, sweepExpiredHolds } from "./bookings"
 import { getSettings } from "./settings"
+import { assertAdminWritable, assertWithinPlanLimit } from "./billing"
 
 export type SessionRecord = schema.Session
 export type SessionWithStatus = SessionRecord & { effectiveStatus: ReturnType<typeof deriveSessionStatus> }
@@ -154,6 +155,11 @@ export async function generateTeamsAndSlots(
 }
 
 export async function createSession(input: SessionInput, ctx: { arenaId: string; actor: AuditActor }) {
+  // Checked before anything is written, on the server. Both refusals are about
+  // the organization's subscription rather than this arena's data, so they
+  // come before the arena-scoped work rather than inside it.
+  await assertAdminWritable(ctx.arenaId)
+  await assertWithinPlanLimit({ arenaId: ctx.arenaId }, "SESSIONS")
   const database = await db()
   const settings = await getSettings(ctx.arenaId)
   const session = await database.transaction(async (tx) => {

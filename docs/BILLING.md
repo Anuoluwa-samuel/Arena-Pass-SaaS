@@ -1,14 +1,13 @@
 # Billing
 
-> **Subscription billing is not built.** The tables below exist and are never
-> read or written: no plan is seeded, no organization has a subscription,
-> nothing is charged and no plan limit is enforced. Everything in the
-> *Subscriptions* and *Feature flags* sections describes the schema, not
-> working behaviour — except feature flags, which are wired.
-> [BILLING_PLAN.md](BILLING_PLAN.md) sets out what it would take.
+> **Nothing is charged yet.** Plans, trials, usage and limits are built and
+> enforced; taking money for a subscription is not. An organization on a plan
+> that it exceeds is refused the operation, but an organization that never pays
+> is never chased. Phases 3–5 of [BILLING_PLAN.md](BILLING_PLAN.md) are the
+> rest.
 >
 > Customer payments — an arena's customers paying that arena — are fully built
-> and in production use. That is the first column below.
+> and unaffected by any of this.
 
 Two financial domains live in this system. They must never be confused.
 
@@ -61,14 +60,45 @@ optional override in `arena_feature_flags`. `isFeatureEnabled(arenaId, flag)`
 is read **on the server** for anything that matters — hiding a button is not a
 feature gate.
 
+## What a lapsed subscription does, and does not, do
+
+A failed charge is between the platform and the venue. The person who already
+paid for a slot is not party to it, so:
+
+- **Never affected:** the storefront, booking, checkout, ticket issue and gate
+  validation. An integration test books, pays for and admits a customer while
+  the organization is `EXPIRED`, because that is the promise most worth having
+  a test for.
+- **Affected, after a grace period:** admin writes. No new sessions, no new
+  staff. `PAST_DUE` keeps working for `PAST_DUE_GRACE_DAYS` past the period
+  end; after that, and for `EXPIRED` or `CANCELLED`, admin writes are refused
+  with `SUBSCRIPTION_INACTIVE` (HTTP 402).
+
+An organization with no subscription at all, or on a plan row that has gone
+missing, **fails open**. That is our bookkeeping problem, and locking an
+operator out of their own arena over it would be the wrong way round.
+
+## Limits
+
+`assertWithinPlanLimit` runs server-side before the thing is created. Counts
+come from the tables themselves rather than from `usage_records`, because a
+counter that drifts either blocks an operator who has room or admits one who
+does not; `usage_records` is the historical ledger, not the live truth.
+
+`STAFF` counts **distinct people** across the organization's arenas — one
+person working at two of your venues is one member of staff.
+
+**`max_arenas` cannot bind today.** Every registration creates a *new*
+organization, so an operator opening a second venue gets a second organization
+and a second subscription rather than a second arena under the first. The limit
+is stored, displayed and counted; it will only ever refuse anything once an
+arena can be added to an existing organization, which is its own piece of
+product work.
+
 ## Not built yet
 
-To be exact about the gap: there is no billing service, no API route, no
-screen, and the `plans` table is never populated. The only code outside the
-schema that mentions subscriptions is the status list in
-`lib/domain/constants.ts`.
-
-The separation was built first on purpose — customer payments and platform
-subscriptions share no table, no status vocabulary and no code path — because
-that is the expensive thing to retrofit. The charging goes on top.
-[BILLING_PLAN.md](BILLING_PLAN.md) is the plan for it.
+Charging. There is no provider integration for subscriptions, no renewal, no
+dunning, no invoices and no self-serve plan change. The separation was built
+first on purpose — customer payments and platform subscriptions share no table,
+no status vocabulary and no code path — because that is the expensive thing to
+retrofit. [BILLING_PLAN.md](BILLING_PLAN.md) phases 3–5 are the rest.

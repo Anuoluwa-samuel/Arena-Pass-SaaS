@@ -24,6 +24,10 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   OAUTH_FAILED: 400,
   RATE_LIMITED: 429,
   PAYMENT_PROVIDER_ERROR: 502,
+  // 402 is the honest code for both: the request was understood and refused
+  // over money, not over who the caller is.
+  PLAN_LIMIT_REACHED: 402,
+  SUBSCRIPTION_INACTIVE: 402,
   INTERNAL_ERROR: 500,
 }
 

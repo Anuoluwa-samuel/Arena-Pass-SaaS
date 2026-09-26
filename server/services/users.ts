@@ -7,6 +7,7 @@ import { hashPassword } from "@/server/auth/password"
 import { revokeAllSessionsFor } from "@/server/auth/session"
 import { ARENA_ROLE_KEYS, PERMISSIONS, type ArenaRoleKey, type Permission, type RoleKey } from "@/lib/domain/constants"
 import { recordAudit, type AuditActor } from "./audit"
+import { assertAdminWritable, assertWithinPlanLimit } from "./billing"
 
 /**
  * Staff management, scoped to one arena.
@@ -126,6 +127,8 @@ export async function listStaff(
  */
 export async function createStaff(input: StaffInput, ctx: StaffContext) {
   assertMayAssign(input.roleKey, ctx.actorRoleKey)
+  await assertAdminWritable(ctx.arenaId)
+  await assertWithinPlanLimit({ arenaId: ctx.arenaId }, "STAFF")
   const database = await db()
   const role = await roleByKey(input.roleKey)
   const email = input.email.toLowerCase()

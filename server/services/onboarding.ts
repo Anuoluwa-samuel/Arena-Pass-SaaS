@@ -9,6 +9,7 @@ import { DEFAULT_CMS_CONTENT } from "@/lib/cms/defaults"
 import { RESERVED_SUBDOMAINS } from "@/server/tenant/resolver"
 import { listPaymentAccounts } from "@/server/payments/accounts"
 import { recordAudit, type AuditActor } from "./audit"
+import { startTrial } from "./billing"
 
 /**
  * How an arena joins Game Slots, and how it is walked to its opening day.
@@ -103,6 +104,11 @@ export async function registerArena(input: RegisterArenaInput, meta: { ip?: stri
         })
       }
       await tx.insert(schema.systemSettings).values({ arenaId: arena.id, key: "siteName", value: input.arenaName })
+
+      // Inside the transaction on purpose: an organization must never exist
+      // without a subscription, or every later read has to decide what the
+      // absence means and they will not all decide alike.
+      await startTrial(organization.id, tx)
 
       return { user, organization, arena, reusedIdentity: !!existingUser }
     })

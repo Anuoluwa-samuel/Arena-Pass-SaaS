@@ -3,10 +3,9 @@
 What it takes to charge organizations for Game Slots, starting from the schema
 that already exists and nothing else.
 
-> Status today: `plans`, `subscriptions`, `subscription_events` and
-> `usage_records` exist as tables and are never read or written. No service, no
-> route, no screen, no seeded plan. Organizations run unlimited arenas,
-> sessions and staff for free. See [BILLING.md](BILLING.md).
+> Status: **Phases 1 and 2 are built.** Every organization has a subscription,
+> plans are seeded, usage is counted and limits are enforced. Nothing is
+> charged. Phases 3–5 remain. See [BILLING.md](BILLING.md).
 
 ---
 
@@ -68,7 +67,7 @@ without changing the model.
 
 ---
 
-## Phase 1 — Plans and trials, no money
+## Phase 1 — Plans and trials, no money · **done**
 
 The catalogue exists, every organization has a subscription, nothing is
 charged. Shippable on its own: it makes the state visible before it can go
@@ -90,7 +89,7 @@ wrong.
   when it says it does; an arena owner cannot read another organization's
   subscription.
 
-## Phase 2 — Usage and limits, still no money
+## Phase 2 — Usage and limits, still no money · **done**
 
 - `recordUsage(organizationId, metric, arenaId)` writing `usage_records`,
   called where arenas, sessions and staff are created.

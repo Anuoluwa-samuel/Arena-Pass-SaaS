@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { Building2, LayoutDashboard, ShieldAlert } from "lucide-react"
+import { Building2, LayoutDashboard, ShieldAlert , Wallet} from "lucide-react"
 import { getCurrentUser } from "@/server/auth/session"
 
 export const dynamic = "force-dynamic"
@@ -36,6 +36,10 @@ export default async function PlatformLayout({ children }: { children: React.Rea
             <Link href="/platform/arenas" className="rounded px-2 py-1 hover:bg-secondary">
               <Building2 className="mr-1 inline size-3.5" />
               Arenas
+            </Link>
+            <Link href="/platform/subscriptions" className="rounded px-2 py-1 hover:bg-secondary">
+              <Wallet className="mr-1 inline size-3.5" />
+              Subscriptions
             </Link>
           </nav>
           <span className="ml-auto text-xs text-muted-foreground">

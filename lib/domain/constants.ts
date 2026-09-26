@@ -186,6 +186,14 @@ export const PERMISSIONS = [
   "settings.view",
   "settings.manage",
   "audit.view",
+  /**
+   * The organization's subscription with Game Slots — not the arena's own
+   * takings, which are `payments.*`. Arena-scoped because there is no
+   * organization-level role: an owner of any arena in the organization manages
+   * its plan. See docs/BILLING_PLAN.md, decision 3.
+   */
+  "billing.view",
+  "billing.manage",
   // Staff management inside one arena.
   "staff.view",
   "staff.invite",
@@ -225,7 +233,11 @@ export function isPlatformPermission(permission: Permission) {
   return permission.startsWith("platform.")
 }
 
-const ARENA_ADMIN_PERMISSIONS = ARENA_PERMISSIONS.filter((p) => p !== "settings.manage")
+// Billing is the owner's, not an administrator's: it is the organization's
+// money and its contract with the platform, a level above the arena an admin
+// was given.
+const OWNER_ONLY: readonly Permission[] = ["settings.manage", "billing.view", "billing.manage"]
+const ARENA_ADMIN_PERMISSIONS = ARENA_PERMISSIONS.filter((p) => !OWNER_ONLY.includes(p))
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, readonly Permission[]> = {
   // Platform roles ------------------------------------------------------
@@ -335,6 +347,10 @@ export const ERROR_CODES = [
   "EMAIL_TAKEN",
   "INVALID_RESET_TOKEN",
   "OAUTH_FAILED",
+  /** The organization is at what its Game Slots plan covers. */
+  "PLAN_LIMIT_REACHED",
+  /** The organization's Game Slots subscription has lapsed past its grace period. */
+  "SUBSCRIPTION_INACTIVE",
   "INTERNAL_ERROR",
 ] as const
 export type ErrorCode = (typeof ERROR_CODES)[number]

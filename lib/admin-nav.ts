@@ -60,6 +60,10 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     items: [
       { href: "/admin/payments", label: "Payments", icon: "credit-card", permission: "payments.view" },
       { href: "/admin/payments/transactions", label: "Transactions", icon: "receipt", permission: "payments.view" },
+      // The organization's subscription with the platform, not the arena's own
+      // takings. Owner-only, which is why it sits behind a different permission
+      // from everything above it.
+      { href: "/admin/billing", label: "Billing", icon: "wallet", permission: "billing.view" },
     ],
   },
   {
