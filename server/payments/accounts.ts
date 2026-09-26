@@ -83,7 +83,7 @@ export async function resolvePaymentAccount(
     logger.warn("payments.no_arena_account", { arenaId, provider })
     throw new AppError(
       "PAYMENT_PROVIDER_ERROR",
-      "This arena has not connected a payment account yet. Add one in Settings → Payments before taking bookings."
+      `This arena has not connected a ${provider} account yet. Add one under Settings → Getting paid before taking bookings.`
     )
   }
 
